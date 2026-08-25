@@ -1,0 +1,6 @@
+target
+.m2-test
+.env
+secrets.yml
+storage
+*.log

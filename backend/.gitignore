@@ -1,0 +1,7 @@
+target/
+.m2-test/
+.env
+secrets.yml
+storage/
+src/main/resources/service-account.json
+*.log

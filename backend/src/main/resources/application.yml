@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: telugu-tunes-api
+  config:
+    import: optional:file:./secrets.yml
+  mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/telugu_tunes}
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 52MB
+
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+  storage:
+    primary: ${APP_STORAGE_PRIMARY:${APP_STORAGE_PROVIDER:disabled}}
+    backup: ${APP_STORAGE_BACKUP:disabled}
+    google-drive:
+      enabled: ${GOOGLE_DRIVE_ENABLED:false}
+      mode: ${GOOGLE_DRIVE_MODE:oauth}
+      service-account-json: ${GOOGLE_SERVICE_ACCOUNT_JSON:}
+      oauth-client-json: ${GOOGLE_OAUTH_CLIENT_JSON:}
+      oauth-token-json: ${GOOGLE_OAUTH_TOKEN_JSON:}
+      oauth-redirect-uri: ${GOOGLE_OAUTH_REDIRECT_URI:http://localhost:8080/api/v1/storage/google-drive/callback}
+      folder-id: ${GOOGLE_DRIVE_FOLDER_ID:}
+    r2:
+      enabled: ${R2_ENABLED:false}
+      endpoint: ${R2_ENDPOINT:}
+      access-key-id: ${R2_ACCESS_KEY_ID:}
+      secret-access-key: ${R2_SECRET_ACCESS_KEY:}
+      bucket: ${R2_BUCKET:telugu-tunes-audio}
+      # Keep a two-gigabyte buffer below R2's current 10 GB free allowance.
+      max-bytes: ${R2_MAX_BYTES:8000000000}
+  gemini:
+    api-key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_MODEL:gemini-3.7-flash}
+  groq:
+    api-key: ${GROQ_API_KEY:}
+    model: ${GROQ_MODEL:qwen/qwen3-32b}
+  youtube:
+    api-key: ${YOUTUBE_API_KEY:}
+  access:
+    # Comma-separated operator emails. Override with APP_ADMIN_EMAILS when deploying elsewhere.
+    admin-emails: ${APP_ADMIN_EMAILS:yugasaimanikanta@gmail.com}

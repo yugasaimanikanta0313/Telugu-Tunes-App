@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: telugu-tunes-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: APP_STORAGE_PRIMARY
+        value: r2
+      - key: APP_STORAGE_BACKUP
+        value: disabled
+      - key: R2_ENABLED
+        value: "true"
+      - key: GOOGLE_DRIVE_ENABLED
+        value: "false"
+      - key: APP_CORS_ALLOWED_ORIGINS
+        value: "*"
+      - key: MONGODB_URI
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        value: telugu-tunes-audio
+      - key: R2_MAX_BYTES
+        value: "8000000000"
+      - key: APP_ADMIN_EMAILS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
