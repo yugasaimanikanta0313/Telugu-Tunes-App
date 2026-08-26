@@ -315,9 +315,31 @@ Future<void> showTrackActions(BuildContext context, Track track) async {
                 title: Text(controller.isDownloaded(track)
                     ? 'Remove download'
                     : 'Download for offline'),
-                onTap: () {
-                  controller.toggleDownload(track);
+                subtitle: controller.isDownloading(track)
+                    ? Text(
+                        '${((controller.downloadProgress[track.id] ?? 0) * 100).round()}% downloaded')
+                    : null,
+                onTap: () async {
                   Navigator.pop(sheetContext);
+                  try {
+                    await controller.toggleDownload(track);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(controller.isDownloaded(track)
+                            ? '${track.title} is ready offline.'
+                            : 'Offline copy removed.'),
+                      ));
+                    }
+                  } catch (error) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(error
+                            .toString()
+                            .replaceFirst('Unsupported operation: ', '')
+                            .replaceFirst('Bad state: ', '')),
+                      ));
+                    }
+                  }
                 },
               ),
               ListTile(

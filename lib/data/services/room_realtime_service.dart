@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+enum RoomConnectionStatus { disconnected, connecting, connected, reconnecting }
+
 class RoomRealtimePlayback {
   const RoomRealtimePlayback({
     required this.roomId,
@@ -26,6 +28,7 @@ class RoomRealtimeService {
     required String authToken,
     required this.onPlayback,
     required this.onRoomChanged,
+    required this.onStatusChanged,
   })  : _uri = _webSocketUri(apiBaseUrl),
         _authToken = authToken;
 
@@ -33,6 +36,7 @@ class RoomRealtimeService {
   final String _authToken;
   final void Function(RoomRealtimePlayback event) onPlayback;
   final void Function() onRoomChanged;
+  final void Function(RoomConnectionStatus status) onStatusChanged;
 
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _subscription;
@@ -43,6 +47,7 @@ class RoomRealtimeService {
   int _authSentAtMs = 0;
   int _serverClockOffsetMs = 0;
   bool _connected = false;
+  RoomConnectionStatus _status = RoomConnectionStatus.disconnected;
 
   bool get connected => _connected;
 
@@ -52,6 +57,7 @@ class RoomRealtimeService {
     }
     disconnect();
     _roomId = roomId;
+    _setStatus(RoomConnectionStatus.connecting);
     final generation = ++_generation;
     unawaited(_open(generation));
   }
@@ -98,6 +104,7 @@ class RoomRealtimeService {
         final midpoint = _authSentAtMs + ((now - _authSentAtMs) ~/ 2);
         _serverClockOffsetMs = serverTime - midpoint;
         _connected = true;
+        _setStatus(RoomConnectionStatus.connected);
         _heartbeat?.cancel();
         _heartbeat = Timer.periodic(const Duration(seconds: 20), (_) {
           _channel?.sink.add(jsonEncode({'type': 'ping'}));
@@ -148,6 +155,7 @@ class RoomRealtimeService {
   void _connectionLost(int generation) {
     if (generation != _generation || _roomId == null) return;
     _connected = false;
+    _setStatus(RoomConnectionStatus.reconnecting);
     _heartbeat?.cancel();
     _heartbeat = null;
     _channel = null;
@@ -164,6 +172,7 @@ class RoomRealtimeService {
   void disconnect() {
     _generation++;
     _connected = false;
+    _setStatus(RoomConnectionStatus.disconnected);
     _roomId = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
@@ -175,6 +184,12 @@ class RoomRealtimeService {
     final channel = _channel;
     _channel = null;
     if (channel != null) unawaited(channel.sink.close());
+  }
+
+  void _setStatus(RoomConnectionStatus value) {
+    if (_status == value) return;
+    _status = value;
+    onStatusChanged(value);
   }
 
   static Uri _webSocketUri(String apiBaseUrl) {

@@ -55,6 +55,14 @@ abstract class MusicRepository {
   });
   Future<ListeningRoom> addToRoomQueue(String roomId, String trackId);
   Future<ListeningRoom> advanceRoomQueue(String roomId, String finishedTrackId);
+  Future<TrackLyrics> getLyrics(String trackId);
+  Future<TrackLyrics> refreshLyrics(String trackId);
+  Future<TrackLyrics> updateLyrics(
+    String trackId, {
+    required String language,
+    required String plainLyrics,
+    required String syncedLyrics,
+  });
   Future<String> askAssistant(String prompt);
 }
 
@@ -163,6 +171,24 @@ class SpringBootMusicRepository implements MusicRepository {
   Future<ListeningRoom> advanceRoomQueue(
           String roomId, String finishedTrackId) =>
       _api.advanceRoomQueue(roomId, finishedTrackId);
+  @override
+  Future<TrackLyrics> getLyrics(String trackId) => _api.getLyrics(trackId);
+  @override
+  Future<TrackLyrics> refreshLyrics(String trackId) =>
+      _api.refreshLyrics(trackId);
+  @override
+  Future<TrackLyrics> updateLyrics(
+    String trackId, {
+    required String language,
+    required String plainLyrics,
+    required String syncedLyrics,
+  }) =>
+      _api.updateLyrics(
+        trackId,
+        language: language,
+        plainLyrics: plainLyrics,
+        syncedLyrics: syncedLyrics,
+      );
   @override
   Future<String> askAssistant(String prompt) => _api.askAssistant(prompt);
 }
@@ -506,6 +532,31 @@ class MockMusicRepository implements MusicRepository {
   Future<ListeningRoom> advanceRoomQueue(
           String roomId, String finishedTrackId) async =>
       getRoom();
+
+  @override
+  Future<TrackLyrics> getLyrics(String trackId) async => const TrackLyrics(
+        trackId: 't1',
+        language: 'te',
+        source: 'demo',
+        plainLyrics: 'వెన్నెల వెలుగులో\nమనసు పాడే పాట',
+        syncedLyrics: '[00:00.00] వెన్నెల వెలుగులో\n[00:08.00] మనసు పాడే పాట',
+        lines: [
+          SyncedLyricLine(start: Duration.zero, text: 'వెన్నెల వెలుగులో'),
+          SyncedLyricLine(start: Duration(seconds: 8), text: 'మనసు పాడే పాట'),
+        ],
+      );
+
+  @override
+  Future<TrackLyrics> refreshLyrics(String trackId) => getLyrics(trackId);
+
+  @override
+  Future<TrackLyrics> updateLyrics(
+    String trackId, {
+    required String language,
+    required String plainLyrics,
+    required String syncedLyrics,
+  }) =>
+      getLyrics(trackId);
 
   @override
   Future<String> askAssistant(String prompt) async {

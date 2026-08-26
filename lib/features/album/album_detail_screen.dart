@@ -139,22 +139,32 @@ class AlbumDetailScreen extends StatelessWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.download_for_offline_rounded),
-              title: const Text('Mark album for offline'),
+              title: const Text('Download album for offline'),
               subtitle: Text('${album.tracks.length} songs'),
               onTap: album.tracks.isEmpty
                   ? null
-                  : () {
-                      for (final track in album.tracks) {
-                        if (!controller.isDownloaded(track)) {
-                          controller.toggleDownload(track);
+                  : () async {
+                      Navigator.pop(sheetContext);
+                      try {
+                        for (final track in album.tracks) {
+                          if (!controller.isDownloaded(track)) {
+                            await controller.toggleDownload(track);
+                          }
+                        }
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(
+                                  '${album.title} is ready for offline playback.')));
+                        }
+                      } catch (error) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(error
+                                  .toString()
+                                  .replaceFirst('Unsupported operation: ', '')
+                                  .replaceFirst('Bad state: ', ''))));
                         }
                       }
-                      Navigator.pop(sheetContext);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content:
-                                Text('${album.title} marked for offline.')),
-                      );
                     },
             ),
             if (controller.isAdmin) ...[

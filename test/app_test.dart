@@ -7,7 +7,12 @@ void main() {
       const TeluguTunesApp(useMockData: true),
     );
 
-    await tester.pumpAndSettle();
+    // The home screen intentionally contains repeating player animations, so
+    // wait for asynchronous repository loading without waiting for all visual
+    // animations to become permanently idle.
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(find.text('నమస్కారం, Srinu'), findsOneWidget);
     expect(find.text('Recently played'), findsOneWidget);

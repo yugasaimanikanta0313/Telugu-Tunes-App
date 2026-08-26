@@ -128,20 +128,27 @@ class LibraryScreen extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                             controller.downloaded.length.toString() +
-                                ' tracks marked for offline • local cache status',
+                                ' tracks stored privately on this device',
                             style: Theme.of(context).textTheme.bodySmall),
                       ])),
-                  TextButton(
-                      onPressed: () => ScaffoldMessenger.of(context)
-                          .showSnackBar(const SnackBar(
-                              content: Text(
-                                  'Offline cache controls will appear after tracks are downloaded.'))),
-                      child: const Text('Manage')),
+                  const Icon(Icons.offline_pin_rounded),
                 ]),
               ),
             ),
           ),
         ),
+        if (controller.downloadedTracks.isNotEmpty)
+          SliverList.builder(
+            itemCount: controller.downloadedTracks.length,
+            itemBuilder: (context, index) {
+              final track = controller.downloadedTracks[index];
+              return TrackTile(
+                track: track,
+                onTap: () => controller.play(track),
+                onMore: () => showTrackActions(context, track),
+              );
+            },
+          ),
         if (controller.imports.isNotEmpty) ...[
           const SliverToBoxAdapter(
               child: SectionTitle(title: 'Recent import requests')),

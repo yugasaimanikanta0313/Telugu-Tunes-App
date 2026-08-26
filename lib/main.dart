@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 
 import 'data/repositories/music_repository.dart';
@@ -11,6 +13,13 @@ import 'state/music_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb) {
+    await JustAudioBackground.init(
+      androidNotificationChannelId: 'com.telugutunes.audio',
+      androidNotificationChannelName: 'Telugu Tunes playback',
+      androidNotificationOngoing: true,
+    );
+  }
   const useMockData = bool.fromEnvironment('USE_MOCK_DATA');
   final restoredSession = useMockData
       ? null

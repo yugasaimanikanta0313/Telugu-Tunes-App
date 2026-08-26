@@ -295,3 +295,31 @@ class AudioReplacementResult {
   final int storedBytes;
   final bool compressed;
 }
+
+class SyncedLyricLine {
+  const SyncedLyricLine({required this.start, required this.text});
+
+  final Duration start;
+  final String text;
+}
+
+class TrackLyrics {
+  const TrackLyrics({
+    required this.trackId,
+    required this.language,
+    required this.source,
+    required this.plainLyrics,
+    required this.syncedLyrics,
+    required this.lines,
+  });
+
+  final String trackId;
+  final String language;
+  final String source;
+  final String plainLyrics;
+  final String syncedLyrics;
+  final List<SyncedLyricLine> lines;
+
+  bool get hasLyrics => plainLyrics.trim().isNotEmpty || lines.isNotEmpty;
+  bool get isSynced => lines.isNotEmpty;
+}

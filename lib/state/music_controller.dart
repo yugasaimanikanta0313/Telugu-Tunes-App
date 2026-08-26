@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/repositories/music_repository.dart';
 import '../data/services/audio_playback_service.dart';
+import '../data/services/offline_download_service.dart';
 import '../data/services/room_realtime_service.dart';
 import '../domain/models/music_models.dart';
 
@@ -18,12 +19,18 @@ class MusicController extends ChangeNotifier {
     this.memberId = '',
     this.isAdmin = false,
   }) {
-    _audio = AudioPlaybackService(apiBaseUrl, authToken);
+    _offline = OfflineDownloadService(apiBaseUrl, authToken);
+    _audio = AudioPlaybackService(
+      apiBaseUrl,
+      authToken,
+      localPathForTrack: _offline.localPathForTrack,
+    );
     _roomRealtime = RoomRealtimeService(
       apiBaseUrl: apiBaseUrl,
       authToken: authToken,
       onPlayback: (event) => unawaited(_handleRealtimePlayback(event)),
       onRoomChanged: () => unawaited(_pollRoom()),
+      onStatusChanged: _roomStatusChanged,
     );
     _subscriptions = [
       _audio.positionStream.listen((value) {
@@ -55,6 +62,7 @@ class MusicController extends ChangeNotifier {
   final String memberId;
   final bool isAdmin;
   late final AudioPlaybackService _audio;
+  late final OfflineDownloadService _offline;
   late final RoomRealtimeService _roomRealtime;
   late final List<StreamSubscription<dynamic>> _subscriptions;
   Timer? _roomPolling;
@@ -63,7 +71,9 @@ class MusicController extends ChangeNotifier {
   Timer? _publicRoomsPolling;
   bool _pollingRoom = false;
   bool _publishingRoomPlayback = false;
-  bool _synchronizingRoom = false;
+  ListeningRoom? _pendingRoomSync;
+  Future<void>? _roomSyncWorker;
+  Timer? _sleepTimer;
   HomeData? _home;
   List<Album> _albums = [];
   List<Playlist> _playlists = [];
@@ -71,7 +81,9 @@ class MusicController extends ChangeNotifier {
   List<Track> searchResults = [];
   ListeningRoom? room;
   final Set<String> favorites = {'t1', 't3'};
-  final Set<String> downloaded = {'t1', 't3', 't6'};
+  final Set<String> downloaded = <String>{};
+  final Map<String, double> downloadProgress = <String, double>{};
+  final List<RoomSyncLog> syncLogs = <RoomSyncLog>[];
   final List<ImportReceipt> imports = [];
   Track? current;
   bool playing = false;
@@ -84,6 +96,15 @@ class MusicController extends ChangeNotifier {
   String? playerError;
   bool shuffleEnabled = false;
   bool repeatEnabled = false;
+  RoomConnectionStatus roomConnectionStatus = RoomConnectionStatus.disconnected;
+  int roomDriftMs = 0;
+  TrackLyrics? currentLyrics;
+  bool lyricsLoading = false;
+  String? lyricsError;
+  DateTime? sleepEndsAt;
+  bool _sleepStoppedPlayback = false;
+  SyncCorrectionKind? _lastLoggedCorrection;
+  DateTime? _lastCorrectionLogAt;
 
   List<MusicCollection> get collections => _home?.collections ?? [];
   List<Album> get albums => _albums;
@@ -92,8 +113,17 @@ class MusicController extends ChangeNotifier {
   List<Track> get allTracks => [for (final album in _albums) ...album.tracks];
   List<Track> get favoriteTracks =>
       allTracks.where((track) => favorites.contains(track.id)).toList();
+  List<Track> get downloadedTracks =>
+      allTracks.where((track) => downloaded.contains(track.id)).toList();
   bool isFavorite(Track track) => favorites.contains(track.id);
   bool isDownloaded(Track track) => downloaded.contains(track.id);
+  bool isDownloading(Track track) => downloadProgress.containsKey(track.id);
+  Duration get position => _position;
+  Duration? get sleepRemaining => sleepEndsAt == null
+      ? null
+      : sleepEndsAt!.difference(DateTime.now()).isNegative
+          ? Duration.zero
+          : sleepEndsAt!.difference(DateTime.now());
   bool get canStream => _audio.isAvailable;
   double get progress {
     final duration = _duration;
@@ -110,6 +140,12 @@ class MusicController extends ChangeNotifier {
     loading = true;
     if (announce) notifyListeners();
     try {
+      if (remoteMode) {
+        await _offline.initialize();
+        downloaded
+          ..clear()
+          ..addAll(_offline.downloadedTrackIds);
+      }
       final values = await Future.wait<dynamic>([
         _repository.getHome(),
         _repository.getAlbums(),
@@ -132,6 +168,7 @@ class MusicController extends ChangeNotifier {
       loadError = error.toString().replaceFirst('Bad state: ', '');
     }
     current ??= recentlyPlayed.firstOrNull ?? allTracks.firstOrNull;
+    if (current != null) unawaited(loadLyrics(current!));
     _configureRoomPolling();
     _configurePublicRoomPolling();
     loading = false;
@@ -149,12 +186,14 @@ class MusicController extends ChangeNotifier {
   }
 
   Future<void> play(Track track) async {
+    _sleepStoppedPlayback = false;
     final activeRoom = room;
     if (activeRoom != null && activeRoom.host != memberId) {
       await _synchronizeToRoom(activeRoom);
       return;
     }
     current = track;
+    unawaited(loadLyrics(track));
     playerError = null;
     _position = Duration.zero;
     unawaited(_publishRoomTrack(track));
@@ -166,7 +205,7 @@ class MusicController extends ChangeNotifier {
     playing = true;
     notifyListeners();
     try {
-      await _audio.play(track.id);
+      await _audio.play(track);
       _publishRealtimeRoomPlayback();
       unawaited(_publishRoomPlayback());
     } catch (error) {
@@ -178,6 +217,7 @@ class MusicController extends ChangeNotifier {
 
   Future<void> togglePlay() async {
     if (current == null) return;
+    if (!playing) _sleepStoppedPlayback = false;
     final activeRoom = room;
     if (activeRoom != null &&
         activeRoom.host != memberId &&
@@ -253,6 +293,14 @@ class MusicController extends ChangeNotifier {
     }
   }
 
+  Future<void> seekTo(Duration position) async {
+    final activeRoom = room;
+    if (activeRoom != null && activeRoom.host != memberId) return;
+    await _audio.seekTo(position);
+    _publishRealtimeRoomPlayback();
+    unawaited(_publishRoomPlayback());
+  }
+
   void toggleFavorite(Track track) {
     favorites.contains(track.id)
         ? favorites.remove(track.id)
@@ -260,11 +308,30 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleDownload(Track track) {
-    downloaded.contains(track.id)
-        ? downloaded.remove(track.id)
-        : downloaded.add(track.id);
+  Future<void> toggleDownload(Track track) async {
+    if (isDownloading(track)) return;
+    if (downloaded.contains(track.id)) {
+      await _offline.remove(track.id);
+      downloaded.remove(track.id);
+      await _audio.invalidate(track.id);
+      notifyListeners();
+      return;
+    }
+    downloadProgress[track.id] = 0;
     notifyListeners();
+    try {
+      await _offline.download(
+        track.id,
+        onProgress: (progress) {
+          downloadProgress[track.id] = progress;
+          notifyListeners();
+        },
+      );
+      downloaded.add(track.id);
+    } finally {
+      downloadProgress.remove(track.id);
+      notifyListeners();
+    }
   }
 
   void toggleRoomConnection() {
@@ -486,33 +553,57 @@ class MusicController extends ChangeNotifier {
   }
 
   Future<void> _synchronizeToRoom(ListeningRoom activeRoom) async {
-    if (_synchronizingRoom) return;
+    _pendingRoomSync = activeRoom;
+    final activeWorker = _roomSyncWorker;
+    if (activeWorker != null) return activeWorker;
+    final worker = _drainRoomSynchronization();
+    _roomSyncWorker = worker;
+    try {
+      await worker;
+    } finally {
+      _roomSyncWorker = null;
+    }
+    if (_pendingRoomSync != null) {
+      await _synchronizeToRoom(_pendingRoomSync!);
+    }
+  }
+
+  Future<void> _drainRoomSynchronization() async {
+    while (_pendingRoomSync != null) {
+      final activeRoom = _pendingRoomSync!;
+      _pendingRoomSync = null;
+      await _applyRoomSynchronization(activeRoom);
+    }
+  }
+
+  Future<void> _applyRoomSynchronization(ListeningRoom activeRoom) async {
     final track = activeRoom.track;
     if (track == null) return;
-    _synchronizingRoom = true;
-    try {
-      current = track;
-      final target = Duration(
-        milliseconds: activeRoom.positionMs.clamp(0, 1 << 31).toInt(),
-      );
-      _position = target;
-      playerError = null;
-      if (!_audio.isAvailable) {
-        playing = activeRoom.roomPlaying;
-        notifyListeners();
-        return;
-      }
-      try {
-        await _audio.synchronize(track.id, target, activeRoom.roomPlaying);
-        playing = activeRoom.roomPlaying;
-      } catch (error) {
-        playerError = error.toString().replaceFirst('Bad state: ', '');
-        playing = false;
-      }
+    if (current?.id != track.id) unawaited(loadLyrics(track));
+    current = track;
+    final target = Duration(
+      milliseconds: activeRoom.positionMs.clamp(0, 1 << 31).toInt(),
+    );
+    _position = target;
+    playerError = null;
+    if (!_audio.isAvailable) {
+      playing = activeRoom.roomPlaying;
       notifyListeners();
-    } finally {
-      _synchronizingRoom = false;
+      return;
     }
+    if (_sleepStoppedPlayback && activeRoom.roomPlaying) return;
+    try {
+      final correction =
+          await _audio.synchronize(track, target, activeRoom.roomPlaying);
+      roomDriftMs = correction.driftMs;
+      _recordCorrection(correction);
+      playing = activeRoom.roomPlaying;
+    } catch (error) {
+      playerError = error.toString().replaceFirst('Bad state: ', '');
+      playing = false;
+      _addSyncLog('Synchronization error: $playerError', roomDriftMs);
+    }
+    notifyListeners();
   }
 
   Future<void> _stopSharedRoomPlayback() async {
@@ -522,6 +613,113 @@ class MusicController extends ChangeNotifier {
     _position = Duration.zero;
     _duration = null;
     playerError = null;
+  }
+
+  void _roomStatusChanged(RoomConnectionStatus status) {
+    roomConnectionStatus = status;
+    final label = switch (status) {
+      RoomConnectionStatus.connected => 'Live connection established',
+      RoomConnectionStatus.connecting => 'Connecting to room',
+      RoomConnectionStatus.reconnecting => 'Connection interrupted; retrying',
+      RoomConnectionStatus.disconnected => 'Room connection closed',
+    };
+    _addSyncLog(label, roomDriftMs);
+    notifyListeners();
+  }
+
+  void _recordCorrection(SyncCorrection correction) {
+    if (correction.kind == SyncCorrectionKind.none) return;
+    final now = DateTime.now();
+    final shouldLog = _lastLoggedCorrection != correction.kind ||
+        _lastCorrectionLogAt == null ||
+        now.difference(_lastCorrectionLogAt!) > const Duration(seconds: 3);
+    if (!shouldLog) return;
+    _lastLoggedCorrection = correction.kind;
+    _lastCorrectionLogAt = now;
+    final message = switch (correction.kind) {
+      SyncCorrectionKind.gentleSpeed => 'Correcting drift smoothly',
+      SyncCorrectionKind.hardSeek => 'Large drift corrected with one seek',
+      SyncCorrectionKind.trackChange => 'Joined the host at the live position',
+      SyncCorrectionKind.paused => 'Matched the host pause position',
+      SyncCorrectionKind.none => 'In sync',
+    };
+    _addSyncLog(message, correction.driftMs);
+  }
+
+  void _addSyncLog(String message, int driftMs) {
+    syncLogs.insert(
+      0,
+      RoomSyncLog(at: DateTime.now(), message: message, driftMs: driftMs),
+    );
+    if (syncLogs.length > 30) syncLogs.removeRange(30, syncLogs.length);
+  }
+
+  Future<void> loadLyrics(Track track, {bool force = false}) async {
+    if (!force && currentLyrics?.trackId == track.id) return;
+    lyricsLoading = true;
+    lyricsError = null;
+    if (current?.id == track.id) currentLyrics = null;
+    notifyListeners();
+    try {
+      final result = force
+          ? await _repository.refreshLyrics(track.id)
+          : await _repository.getLyrics(track.id);
+      if (current?.id == track.id) currentLyrics = result;
+    } catch (error) {
+      if (current?.id == track.id) {
+        lyricsError = error.toString().replaceFirst('Bad state: ', '');
+      }
+    } finally {
+      if (current?.id == track.id) lyricsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateLyrics(
+    Track track, {
+    required String language,
+    required String plainLyrics,
+    required String syncedLyrics,
+  }) async {
+    currentLyrics = await _repository.updateLyrics(
+      track.id,
+      language: language,
+      plainLyrics: plainLyrics,
+      syncedLyrics: syncedLyrics,
+    );
+    lyricsError = null;
+    notifyListeners();
+  }
+
+  void startSleepTimer(Duration duration) {
+    _sleepTimer?.cancel();
+    _sleepStoppedPlayback = false;
+    sleepEndsAt = DateTime.now().add(duration);
+    _sleepTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (DateTime.now().isBefore(sleepEndsAt!)) {
+        notifyListeners();
+        return;
+      }
+      timer.cancel();
+      _sleepTimer = null;
+      sleepEndsAt = null;
+      _sleepStoppedPlayback = true;
+      unawaited(_audio.stop().then((_) {
+        playing = false;
+        _publishRealtimeRoomPlayback();
+        unawaited(_publishRoomPlayback());
+        notifyListeners();
+      }));
+    });
+    notifyListeners();
+  }
+
+  void cancelSleepTimer() {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    sleepEndsAt = null;
+    _sleepStoppedPlayback = false;
+    notifyListeners();
   }
 
   Future<ImportReceipt> addImport(ImportRequest request) async {
@@ -564,6 +762,7 @@ class MusicController extends ChangeNotifier {
 
   Future<void> deleteTrack(Track track) async {
     await _repository.deleteTrack(track.id);
+    await _offline.remove(track.id);
     favorites.remove(track.id);
     downloaded.remove(track.id);
     if (current?.id == track.id) {
@@ -583,6 +782,7 @@ class MusicController extends ChangeNotifier {
     final result =
         await _repository.replaceTrackAudio(track.id, fileName, bytes);
     final updated = result.track;
+    if (downloaded.remove(track.id)) await _offline.remove(track.id);
     final wasPlaying = current?.id == track.id && playing;
     if (current?.id == track.id) {
       await _audio.invalidate(track.id);
@@ -643,6 +843,7 @@ class MusicController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _sleepTimer?.cancel();
     _roomPolling?.cancel();
     _roomPlaybackPublisher?.cancel();
     _roomRealtimePublisher?.cancel();
@@ -660,6 +861,18 @@ class MusicController extends ChangeNotifier {
     final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }
+}
+
+class RoomSyncLog {
+  const RoomSyncLog({
+    required this.at,
+    required this.message,
+    required this.driftMs,
+  });
+
+  final DateTime at;
+  final String message;
+  final int driftMs;
 }
 
 extension FirstOrNull<E> on List<E> {

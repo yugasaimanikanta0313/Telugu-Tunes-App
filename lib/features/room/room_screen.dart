@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/services/room_realtime_service.dart';
 import '../../domain/models/music_models.dart';
 import '../../state/music_controller.dart';
 import '../shared/widgets.dart';
@@ -116,7 +117,8 @@ class _ActiveRoom extends StatelessWidget {
                                     .titleLarge
                                     ?.copyWith(fontWeight: FontWeight.w900)),
                             const SizedBox(height: 4),
-                            Text(_isHost ? 'Your room' : 'You joined this room'),
+                            Text(
+                                _isHost ? 'Your room' : 'You joined this room'),
                             const SizedBox(height: 7),
                             Text(
                               track == null
@@ -135,10 +137,13 @@ class _ActiveRoom extends StatelessWidget {
                     children: [
                       Expanded(
                         child: FilledButton.icon(
-                          onPressed:
-                              track == null ? null : () => controller.play(track),
+                          onPressed: track == null
+                              ? null
+                              : () => controller.play(track),
                           icon: const Icon(Icons.headphones_rounded),
-                          label: Text(track == null ? 'Add a song first' : 'Listen now'),
+                          label: Text(track == null
+                              ? 'Add a song first'
+                              : 'Listen now'),
                         ),
                       ),
                       if (!room.isPublic && _isHost) ...[
@@ -165,10 +170,41 @@ class _ActiveRoom extends StatelessWidget {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: Card(
+              child: ListTile(
+                leading: Icon(
+                  controller.roomConnectionStatus ==
+                          RoomConnectionStatus.connected
+                      ? Icons.cloud_done_rounded
+                      : Icons.sync_rounded,
+                  color: controller.roomConnectionStatus ==
+                          RoomConnectionStatus.connected
+                      ? Colors.greenAccent
+                      : Colors.amberAccent,
+                ),
+                title: Text(_connectionLabel(controller.roomConnectionStatus)),
+                subtitle: Text(
+                  _isHost
+                      ? 'Broadcasting the live position to everyone'
+                      : 'Current drift ${controller.roomDriftMs.abs()} ms • smart correction active',
+                ),
+                trailing: TextButton(
+                  onPressed: () => _showSyncLogs(context),
+                  child: const Text('Logs'),
+                ),
+              ),
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
             child: OutlinedButton.icon(
               onPressed: () => _leaveRoom(context),
-              icon: Icon(_isHost ? Icons.stop_circle_outlined : Icons.logout_rounded),
-              label: Text(_isHost ? 'Close room for everyone' : 'Leave this room'),
+              icon: Icon(
+                  _isHost ? Icons.stop_circle_outlined : Icons.logout_rounded),
+              label:
+                  Text(_isHost ? 'Close room for everyone' : 'Leave this room'),
               style: OutlinedButton.styleFrom(
                   foregroundColor: Theme.of(context).colorScheme.error),
             ),
@@ -212,6 +248,55 @@ class _ActiveRoom extends StatelessWidget {
     );
   }
 
+  String _connectionLabel(RoomConnectionStatus status) => switch (status) {
+        RoomConnectionStatus.connected => 'Room connected',
+        RoomConnectionStatus.connecting => 'Connecting to room…',
+        RoomConnectionStatus.reconnecting => 'Reconnecting automatically…',
+        RoomConnectionStatus.disconnected => 'Room connection closed',
+      };
+
+  void _showSyncLogs(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final logs = controller.syncLogs;
+        return SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            children: [
+              Text('Synchronization logs',
+                  style: Theme.of(sheetContext)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 8),
+              const Text(
+                  'Gentle corrections change speed briefly. A hard seek is used only for large drift.'),
+              const SizedBox(height: 12),
+              if (logs.isEmpty)
+                const ListTile(
+                  leading: Icon(Icons.history_rounded),
+                  title: Text('No synchronization events yet'),
+                )
+              else
+                ...logs.map((log) => ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.sync_rounded),
+                      title: Text(log.message),
+                      subtitle: Text(
+                          '${_clock(log.at)} • drift ${log.driftMs >= 0 ? '+' : ''}${log.driftMs} ms'),
+                    )),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _clock(DateTime value) =>
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}:${value.second.toString().padLeft(2, '0')}';
+
   Future<void> _leaveRoom(BuildContext context) async {
     final action = _isHost ? 'Close room' : 'Leave room';
     final confirmed = await showDialog<bool>(
@@ -235,8 +320,8 @@ class _ActiveRoom extends StatelessWidget {
     try {
       await context.read<MusicController>().leaveRoom();
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(_isHost ? 'Room closed.' : 'You left the room.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(_isHost ? 'Room closed.' : 'You left the room.')));
       }
     } catch (error) {
       if (context.mounted) {
@@ -249,8 +334,8 @@ class _ActiveRoom extends StatelessWidget {
   static Future<void> _copyCode(BuildContext context, String code) async {
     await Clipboard.setData(ClipboardData(text: code));
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Private invite code copied.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Private invite code copied.')));
     }
   }
 
@@ -291,10 +376,11 @@ class _ActiveRoom extends StatelessWidget {
                       if (sheetContext.mounted) Navigator.pop(sheetContext);
                     } catch (error) {
                       if (sheetContext.mounted) {
-                        ScaffoldMessenger.of(sheetContext).showSnackBar(SnackBar(
-                            content: Text(error
-                                .toString()
-                                .replaceFirst('Bad state: ', ''))));
+                        ScaffoldMessenger.of(sheetContext).showSnackBar(
+                            SnackBar(
+                                content: Text(error
+                                    .toString()
+                                    .replaceFirst('Bad state: ', ''))));
                       }
                     }
                   },
@@ -397,7 +483,8 @@ class _RoomLobby extends StatelessWidget {
                               .titleMedium
                               ?.copyWith(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 5),
-                      const Text('Public rooms are discoverable. Private rooms use a shareable code.'),
+                      const Text(
+                          'Public rooms are discoverable. Private rooms use a shareable code.'),
                       const SizedBox(height: 14),
                       LayoutBuilder(
                         builder: (context, constraints) {
@@ -414,12 +501,13 @@ class _RoomLobby extends StatelessWidget {
                           );
                           return vertical
                               ? Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
-                                    publicButton,
-                                    const SizedBox(height: 10),
-                                    privateButton
-                                  ])
+                                      publicButton,
+                                      const SizedBox(height: 10),
+                                      privateButton
+                                    ])
                               : Row(children: [
                                   Expanded(child: publicButton),
                                   const SizedBox(width: 10),
@@ -452,7 +540,8 @@ class _RoomLobby extends StatelessWidget {
                   child: ListTile(
                     leading: Icon(Icons.public_off_rounded),
                     title: Text('No public rooms right now'),
-                    subtitle: Text('Create one so members can join without a code.'),
+                    subtitle:
+                        Text('Create one so members can join without a code.'),
                   ),
                 ),
               ),
@@ -464,7 +553,8 @@ class _RoomLobby extends StatelessWidget {
                 final room = controller.publicRooms[index];
                 final track = room.track;
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                   child: Card(
                     child: ListTile(
                       leading: Artwork(
@@ -577,8 +667,8 @@ class _RoomLobby extends StatelessWidget {
     try {
       await controller.joinRoom(inviteCode);
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Joined private room.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Joined private room.')));
       }
     } catch (error) {
       if (context.mounted) {

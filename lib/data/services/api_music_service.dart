@@ -66,6 +66,14 @@ abstract class MusicApiService {
   });
   Future<ListeningRoom> addToRoomQueue(String roomId, String trackId);
   Future<ListeningRoom> advanceRoomQueue(String roomId, String finishedTrackId);
+  Future<TrackLyrics> getLyrics(String trackId);
+  Future<TrackLyrics> refreshLyrics(String trackId);
+  Future<TrackLyrics> updateLyrics(
+    String trackId, {
+    required String language,
+    required String plainLyrics,
+    required String syncedLyrics,
+  });
   Future<String> askAssistant(String prompt);
 }
 
@@ -428,6 +436,27 @@ class SpringBootMusicApiService implements MusicApiService {
           '/rooms/$roomId/queue/advance/$finishedTrackId', const {}));
 
   @override
+  Future<TrackLyrics> getLyrics(String trackId) async =>
+      _lyrics(await _getMap('/tracks/$trackId/lyrics'));
+
+  @override
+  Future<TrackLyrics> refreshLyrics(String trackId) async =>
+      _lyrics(await _postMap('/tracks/$trackId/lyrics/import', const {}));
+
+  @override
+  Future<TrackLyrics> updateLyrics(
+    String trackId, {
+    required String language,
+    required String plainLyrics,
+    required String syncedLyrics,
+  }) async =>
+      _lyrics(await _putMap('/tracks/$trackId/lyrics', {
+        'language': language,
+        'plainLyrics': plainLyrics,
+        'syncedLyrics': syncedLyrics,
+      }));
+
+  @override
   Future<String> askAssistant(String prompt) async {
     final response = await _client.post(
       Uri.parse(config.baseUrl + '/assistant'),
@@ -610,4 +639,30 @@ class SpringBootMusicApiService implements MusicApiService {
         roomPlaying: room['playing'] as bool? ?? false,
         connected: room['active'] as bool? ?? true,
       );
+
+  TrackLyrics _lyrics(Map<String, dynamic> json) {
+    final synced = json['syncedLyrics'] as String? ?? '';
+    final expression = RegExp(r'^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$');
+    final lines = <SyncedLyricLine>[];
+    for (final rawLine in synced.split(RegExp(r'\r?\n'))) {
+      final match = expression.firstMatch(rawLine.trim());
+      if (match == null) continue;
+      final minutes = int.tryParse(match.group(1)!) ?? 0;
+      final seconds = double.tryParse(match.group(2)!) ?? 0;
+      lines.add(SyncedLyricLine(
+        start:
+            Duration(milliseconds: ((minutes * 60 + seconds) * 1000).round()),
+        text: match.group(3)?.trim() ?? '',
+      ));
+    }
+    lines.sort((a, b) => a.start.compareTo(b.start));
+    return TrackLyrics(
+      trackId: json['trackId'] as String? ?? '',
+      language: json['language'] as String? ?? 'te',
+      source: json['source'] as String? ?? 'unavailable',
+      plainLyrics: json['plainLyrics'] as String? ?? '',
+      syncedLyrics: synced,
+      lines: lines,
+    );
+  }
 }

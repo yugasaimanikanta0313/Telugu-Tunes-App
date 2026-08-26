@@ -13,6 +13,7 @@ import com.telugutunes.api.domain.MemberRole;
 import com.telugutunes.api.exception.NotFoundException;
 import com.telugutunes.api.repository.AlbumRepository;
 import com.telugutunes.api.repository.ListeningRoomRepository;
+import com.telugutunes.api.repository.LyricsRepository;
 import com.telugutunes.api.repository.PlaylistRepository;
 import com.telugutunes.api.repository.MemberRepository;
 import com.telugutunes.api.repository.TrackRepository;
@@ -34,6 +35,7 @@ public class CatalogService {
   private final AlbumRepository albums;
   private final PlaylistRepository playlists;
   private final ListeningRoomRepository rooms;
+  private final LyricsRepository lyrics;
   private final MemberRepository members;
   private final AuthService auth;
   private final ResilientStorageService storage;
@@ -43,6 +45,7 @@ public class CatalogService {
       AlbumRepository albums,
       PlaylistRepository playlists,
       ListeningRoomRepository rooms,
+      LyricsRepository lyrics,
       MemberRepository members,
       AuthService auth,
       ResilientStorageService storage) {
@@ -50,6 +53,7 @@ public class CatalogService {
     this.albums = albums;
     this.playlists = playlists;
     this.rooms = rooms;
+    this.lyrics = lyrics;
     this.members = members;
     this.auth = auth;
     this.storage = storage;
@@ -111,6 +115,7 @@ public class CatalogService {
       storage.delete(track.driveFileId());
     }
     tracks.deleteById(trackId);
+    lyrics.deleteById(trackId);
     for (var album : albums.findAll()) {
       if (!album.trackIds().contains(trackId)) continue;
       var ids = new ArrayList<>(album.trackIds());
