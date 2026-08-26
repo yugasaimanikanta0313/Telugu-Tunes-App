@@ -181,6 +181,7 @@ class ListeningRoom {
   final int listeners;
   final Track? track;
   final List<Track> queue;
+
   /// Host position returned by the API, already adjusted using the server clock.
   final int positionMs;
   final bool roomPlaying;
@@ -266,9 +267,31 @@ class ImportReceipt {
     required this.source,
     required this.message,
     required this.createdAt,
+    this.fileName = '',
+    this.originalBytes = 0,
+    this.storedBytes = 0,
+    this.compressed = false,
   });
 
   final ImportSource source;
   final String message;
   final DateTime createdAt;
+  final String fileName;
+  final int originalBytes;
+  final int storedBytes;
+  final bool compressed;
+}
+
+class AudioReplacementResult {
+  const AudioReplacementResult({
+    required this.track,
+    required this.originalBytes,
+    required this.storedBytes,
+    required this.compressed,
+  });
+
+  final Track track;
+  final int originalBytes;
+  final int storedBytes;
+  final bool compressed;
 }

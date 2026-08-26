@@ -50,7 +50,13 @@ public class GoogleDriveStorageService implements MediaStorageService {
               .create(metadata, content)
               .setFields("id,name,mimeType,size")
               .execute();
-      return new StoredMedia(uploaded.getId(), uploaded.getName(), uploaded.getMimeType());
+      return new StoredMedia(
+          uploaded.getId(),
+          uploaded.getName(),
+          uploaded.getMimeType(),
+          source.getSize(),
+          source.getSize(),
+          false);
     } finally {
       Files.deleteIfExists(temporaryFile);
     }

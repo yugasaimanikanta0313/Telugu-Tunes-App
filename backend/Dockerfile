@@ -9,6 +9,10 @@ RUN mvn -B -DskipTests package
 
 FROM eclipse-temurin:21-jre
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN useradd --system --uid 10001 appuser
 WORKDIR /app
 COPY --from=build /workspace/target/telugu-tunes-api-0.1.0.jar app.jar

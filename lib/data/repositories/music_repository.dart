@@ -17,7 +17,7 @@ abstract class MusicRepository {
   Future<Album> updateAlbum(Album album);
   Future<void> deleteAlbum(String albumId);
   Future<Track> updateTrack(Track track);
-  Future<Track> replaceTrackAudio(
+  Future<AudioReplacementResult> replaceTrackAudio(
       String trackId, String fileName, Uint8List bytes);
   Future<List<AdminMember>> getAdminMembers();
   Future<AdminMember> updateAdminMember(
@@ -86,7 +86,7 @@ class SpringBootMusicRepository implements MusicRepository {
   @override
   Future<Track> updateTrack(Track track) => _api.updateTrack(track);
   @override
-  Future<Track> replaceTrackAudio(
+  Future<AudioReplacementResult> replaceTrackAudio(
           String trackId, String fileName, Uint8List bytes) =>
       _api.replaceTrackAudio(trackId, fileName, bytes);
   @override
@@ -372,7 +372,7 @@ class MockMusicRepository implements MusicRepository {
   Future<Track> updateTrack(Track track) async => track;
 
   @override
-  Future<Track> replaceTrackAudio(
+  Future<AudioReplacementResult> replaceTrackAudio(
           String trackId, String fileName, Uint8List bytes) async =>
       Future.error(StateError('Replacing audio needs the private backend.'));
 

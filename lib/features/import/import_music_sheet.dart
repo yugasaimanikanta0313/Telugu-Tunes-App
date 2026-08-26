@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../domain/models/music_models.dart';
 import '../../state/music_controller.dart';
 
+const _maximumStoredAudioBytes = 5000000;
+
 void showImportMusicSheet(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,
@@ -71,9 +73,41 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
       );
       if (result == null) return;
       final files = result.files.where((file) => file.bytes != null).toList();
-      if (files.isEmpty)
+      if (files.isEmpty) {
         throw StateError(
             'The selected file could not be read. Please try again.');
+      }
+      final oversized = files
+          .where((file) =>
+              (file.bytes?.length ?? file.size) > _maximumStoredAudioBytes)
+          .toList();
+      if (oversized.isNotEmpty) {
+        if (!mounted) return;
+        final details = oversized
+            .map((file) =>
+                '${file.name} (${_megabytes(file.bytes?.length ?? file.size)})')
+            .join('\n');
+        final approved = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Compress oversized audio?'),
+            content: Text(
+              '$details\n\nThese files exceed 5 MB. Telugu Tunes will convert them to M4A and guarantee each stored file is no larger than 5 MB. Continue?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Compress and add'),
+              ),
+            ],
+          ),
+        );
+        if (approved != true) return;
+      }
       final firstName = _nameFromFile(files.first.name);
       setState(() {
         _audioFiles = files;
@@ -139,6 +173,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
     try {
       final controller = context.read<MusicController>();
       ImportReceipt? receipt;
+      final receipts = <ImportReceipt>[];
       for (var index = 0; index < _audioFiles.length; index++) {
         final file = _audioFiles[index];
         receipt = await controller.uploadAudio(
@@ -154,11 +189,17 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
           artworkUrl: _thumbnailUrl,
           sourceUrl: _sourceUrl,
         );
+        receipts.add(receipt);
       }
       if (!mounted) return;
+      final compressed = receipts.where((item) => item.compressed).map((item) =>
+          '${item.fileName}: ${_megabytes(item.originalBytes)} → ${_megabytes(item.storedBytes)}');
+      final message = compressed.isEmpty
+          ? receipt!.message
+          : 'Upload complete. Compressed size:\n${compressed.join('\n')}';
       Navigator.pop(context);
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(receipt!.message)));
+          .showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       _showError(error);
     } finally {
@@ -192,9 +233,10 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
       _showMessage(error.toString().replaceFirst('Bad state: ', ''));
 
   void _showMessage(String message) {
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   String _nameFromFile(String fileName) => fileName
@@ -411,7 +453,8 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Album / movie',
-                helperText: 'If it is not found automatically, enter the movie name.',
+                helperText:
+                    'If it is not found automatically, enter the movie name.',
               ),
             ),
             TextField(
@@ -484,6 +527,8 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         ),
       );
 }
+
+String _megabytes(int bytes) => '${(bytes / 1000000).toStringAsFixed(2)} MB';
 
 class _ImportOption extends StatelessWidget {
   const _ImportOption({

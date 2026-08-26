@@ -15,7 +15,13 @@ public interface MediaStorageService {
 
   void delete(String objectId) throws IOException;
 
-  record StoredMedia(String objectId, String fileName, String mimeType) {}
+  record StoredMedia(
+      String objectId,
+      String fileName,
+      String mimeType,
+      long originalBytes,
+      long storedBytes,
+      boolean compressed) {}
 
   record StoredMediaInfo(long size, String mimeType) {}
 }

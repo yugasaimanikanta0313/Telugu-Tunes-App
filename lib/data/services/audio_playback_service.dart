@@ -118,6 +118,13 @@ class AudioPlaybackService {
     _loadedTrackId = null;
   }
 
+  /// Stops shared playback and forgets the loaded track so leaving a room
+  /// cannot resume its audio later.
+  Future<void> stop() async {
+    await _player.stop();
+    _loadedTrackId = null;
+  }
+
   Future<void> dispose() async {
     for (final subscription in _subscriptions) {
       await subscription.cancel();

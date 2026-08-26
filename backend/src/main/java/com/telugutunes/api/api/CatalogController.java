@@ -3,6 +3,7 @@ package com.telugutunes.api.api;
 import com.telugutunes.api.api.dto.AlbumResponse;
 import com.telugutunes.api.api.dto.HomeResponse;
 import com.telugutunes.api.api.dto.TrackResponse;
+import com.telugutunes.api.api.dto.TrackAudioReplacementResponse;
 import com.telugutunes.api.api.dto.UpdateAlbumRequest;
 import com.telugutunes.api.api.dto.UpdateTrackRequest;
 import com.telugutunes.api.service.CatalogService;
@@ -78,7 +79,7 @@ public class CatalogController {
   }
 
   @PutMapping(value = "/tracks/{id}/audio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public TrackResponse replaceTrackAudio(
+  public TrackAudioReplacementResponse replaceTrackAudio(
       @PathVariable String id,
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
       @RequestPart("file") MultipartFile file)

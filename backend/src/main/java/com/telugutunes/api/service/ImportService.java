@@ -76,14 +76,17 @@ public class ImportService {
         genre,
         artworkUrl,
         sourceUrl);
-    return ImportResponse.from(
+    var job =
         save(
             memberId,
             "device-file",
             media.fileName(),
             media.objectId(),
             ImportStatus.READY,
-            "Audio uploaded to the private music library."));
+            media.compressed()
+                ? "Audio compressed to M4A and uploaded to the private music library."
+                : "Audio uploaded to the private music library.");
+    return ImportResponse.from(job, media);
   }
 
   private void saveImportedTrack(

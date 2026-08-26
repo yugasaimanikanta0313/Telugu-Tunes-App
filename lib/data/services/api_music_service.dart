@@ -28,7 +28,7 @@ abstract class MusicApiService {
   Future<Album> updateAlbum(Album album);
   Future<void> deleteAlbum(String albumId);
   Future<Track> updateTrack(Track track);
-  Future<Track> replaceTrackAudio(
+  Future<AudioReplacementResult> replaceTrackAudio(
       String trackId, String fileName, Uint8List bytes);
   Future<List<AdminMember>> getAdminMembers();
   Future<AdminMember> updateAdminMember(
@@ -249,7 +249,7 @@ class SpringBootMusicApiService implements MusicApiService {
       );
 
   @override
-  Future<Track> replaceTrackAudio(
+  Future<AudioReplacementResult> replaceTrackAudio(
       String trackId, String fileName, Uint8List bytes) async {
     final request = http.MultipartRequest(
       'PUT',
@@ -259,7 +259,13 @@ class SpringBootMusicApiService implements MusicApiService {
       ..files
           .add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
     final response = await http.Response.fromStream(await request.send());
-    return _track(_decodeMap(response));
+    final body = _decodeMap(response);
+    return AudioReplacementResult(
+      track: _track(Map<String, dynamic>.from(body['track'] as Map)),
+      originalBytes: (body['originalBytes'] as num?)?.toInt() ?? bytes.length,
+      storedBytes: (body['storedBytes'] as num?)?.toInt() ?? bytes.length,
+      compressed: body['compressed'] as bool? ?? false,
+    );
   }
 
   @override
@@ -328,6 +334,10 @@ class SpringBootMusicApiService implements MusicApiService {
       source: ImportSource.deviceFile,
       message: body['message'] as String,
       createdAt: DateTime.now(),
+      fileName: body['originalFileName'] as String? ?? fileName,
+      originalBytes: (body['originalBytes'] as num?)?.toInt() ?? bytes.length,
+      storedBytes: (body['storedBytes'] as num?)?.toInt() ?? bytes.length,
+      compressed: body['compressed'] as bool? ?? false,
     );
   }
 

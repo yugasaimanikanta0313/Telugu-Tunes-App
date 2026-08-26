@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../domain/models/music_models.dart';
 import '../../state/music_controller.dart';
 
+const _maximumStoredAudioBytes = 5000000;
+
 Color colorFromHex(String value) {
   final clean = value.replaceFirst('#', '');
   return Color(int.parse('FF' + clean, radix: 16));
@@ -292,83 +294,83 @@ Future<void> showTrackActions(BuildContext context, Track track) async {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-            ListTile(
-                leading: const Icon(Icons.play_arrow_rounded),
-                title: const Text('Play now'),
+              ListTile(
+                  leading: const Icon(Icons.play_arrow_rounded),
+                  title: const Text('Play now'),
+                  onTap: () {
+                    controller.play(track);
+                    Navigator.pop(sheetContext);
+                  }),
+              ListTile(
+                  leading: const Icon(Icons.playlist_add_rounded),
+                  title: const Text('Add to a playlist'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    showAddToPlaylistSheet(context, track);
+                  }),
+              ListTile(
+                leading: Icon(controller.isDownloaded(track)
+                    ? Icons.delete_outline_rounded
+                    : Icons.download_for_offline_rounded),
+                title: Text(controller.isDownloaded(track)
+                    ? 'Remove download'
+                    : 'Download for offline'),
                 onTap: () {
-                  controller.play(track);
+                  controller.toggleDownload(track);
                   Navigator.pop(sheetContext);
-                }),
-            ListTile(
-                leading: const Icon(Icons.playlist_add_rounded),
-                title: const Text('Add to a playlist'),
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.group_add_rounded),
+                title: const Text('Add to room queue'),
                 onTap: () {
+                  final hasRoom = controller.room != null;
+                  if (hasRoom) controller.addToRoomQueue(track);
                   Navigator.pop(sheetContext);
-                  showAddToPlaylistSheet(context, track);
-                }),
-            ListTile(
-              leading: Icon(controller.isDownloaded(track)
-                  ? Icons.delete_outline_rounded
-                  : Icons.download_for_offline_rounded),
-              title: Text(controller.isDownloaded(track)
-                  ? 'Remove download'
-                  : 'Download for offline'),
-              onTap: () {
-                controller.toggleDownload(track);
-                Navigator.pop(sheetContext);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.group_add_rounded),
-              title: const Text('Add to room queue'),
-              onTap: () {
-                final hasRoom = controller.room != null;
-                if (hasRoom) controller.addToRoomQueue(track);
-                Navigator.pop(sheetContext);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      hasRoom
-                          ? 'Added to the shared room queue.'
-                          : 'Create or join a room first.',
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        hasRoom
+                            ? 'Added to the shared room queue.'
+                            : 'Create or join a room first.',
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
-            if (controller.isAdmin) ...[
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: const Text('Edit song details'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  showEditTrackDialog(context, track);
+                  );
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.audio_file_rounded),
-                title: const Text('Replace audio file'),
-                subtitle: const Text('Keeps this song’s details and album'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _replaceTrackAudio(context, track);
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.delete_forever_outlined,
-                    color: Theme.of(context).colorScheme.error),
-                title: Text('Delete from private library',
-                    style:
-                        TextStyle(color: Theme.of(context).colorScheme.error)),
-                subtitle: const Text(
-                    'Removes the uploaded audio and its library entry'),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  await _confirmDeleteTrack(context, track);
-                },
-              ),
-            ],
+              if (controller.isAdmin) ...[
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Edit song details'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    showEditTrackDialog(context, track);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.audio_file_rounded),
+                  title: const Text('Replace audio file'),
+                  subtitle: const Text('Keeps this song’s details and album'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _replaceTrackAudio(context, track);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.delete_forever_outlined,
+                      color: Theme.of(context).colorScheme.error),
+                  title: Text('Delete from private library',
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
+                  subtitle: const Text(
+                      'Removes the uploaded audio and its library entry'),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    await _confirmDeleteTrack(context, track);
+                  },
+                ),
+              ],
             ],
           ),
         ),
@@ -379,19 +381,25 @@ Future<void> showTrackActions(BuildContext context, Track track) async {
 
 Future<void> _replaceTrackAudio(BuildContext context, Track track) async {
   try {
-    final result = await FilePicker.pickFiles(type: FileType.audio, withData: true);
+    final result =
+        await FilePicker.pickFiles(type: FileType.audio, withData: true);
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     if (file.bytes == null) {
-      throw StateError('The selected file could not be read. Please try again.');
+      throw StateError(
+          'The selected file could not be read. Please try again.');
     }
     if (!context.mounted) return;
+    final originalSize = file.bytes!.length;
+    final needsCompression = originalSize > _maximumStoredAudioBytes;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Replace audio file?'),
         content: Text(
-          '“${track.title}” will keep its details, but play the new file “${file.name}”. The old private Drive file will be removed.',
+          needsCompression
+              ? '“${file.name}” is ${_megabytes(originalSize)}, which exceeds 5 MB. It will be converted to M4A and stored below 5 MB. Replace “${track.title}” with the compressed file?'
+              : '“${track.title}” will keep its details, but play the new file “${file.name}”. The old private file will be removed.',
         ),
         actions: [
           TextButton(
@@ -399,17 +407,22 @@ Future<void> _replaceTrackAudio(BuildContext context, Track track) async {
               child: const Text('Cancel')),
           FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Replace')),
+              child:
+                  Text(needsCompression ? 'Compress and replace' : 'Replace')),
         ],
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await context
+    final replacement = await context
         .read<MusicController>()
         .replaceTrackAudio(track, file.name, file.bytes!);
     if (context.mounted) {
+      final sizeMessage = replacement.compressed
+          ? ' ${_megabytes(replacement.originalBytes)} → ${_megabytes(replacement.storedBytes)}.'
+          : '';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Audio replaced for “${track.title}”.')),
+        SnackBar(
+            content: Text('Audio replaced for “${track.title}”.$sizeMessage')),
       );
     }
   } catch (error) {
@@ -421,6 +434,8 @@ Future<void> _replaceTrackAudio(BuildContext context, Track track) async {
     }
   }
 }
+
+String _megabytes(int bytes) => '${(bytes / 1000000).toStringAsFixed(2)} MB';
 
 Future<void> showAddToPlaylistSheet(BuildContext context, Track track) async {
   final controller = context.read<MusicController>();

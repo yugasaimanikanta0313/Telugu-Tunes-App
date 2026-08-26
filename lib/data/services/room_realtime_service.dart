@@ -9,14 +9,14 @@ class RoomRealtimePlayback {
     required this.trackId,
     required this.positionMs,
     required this.playing,
-    required this.estimatedTransitMs,
+    required this.elapsedSinceHostUpdateMs,
   });
 
   final String roomId;
   final String trackId;
   final int positionMs;
   final bool playing;
-  final int estimatedTransitMs;
+  final int elapsedSinceHostUpdateMs;
 }
 
 /// Maintains one authenticated WebSocket for immediate listening-room updates.
@@ -115,13 +115,14 @@ class RoomRealtimeService {
       final now = DateTime.now().millisecondsSinceEpoch;
       final serverTime = (payload['serverTimeMs'] as num?)?.toInt() ?? now;
       final serverTimeOnLocalClock = serverTime - _serverClockOffsetMs;
-      final transitMs = (now - serverTimeOnLocalClock).clamp(0, 2000).toInt();
+      final elapsedSinceHostUpdateMs =
+          (now - serverTimeOnLocalClock).clamp(0, 1 << 31).toInt();
       onPlayback(RoomRealtimePlayback(
         roomId: roomId,
         trackId: trackId,
         positionMs: (payload['positionMs'] as num?)?.toInt() ?? 0,
         playing: payload['playing'] as bool? ?? false,
-        estimatedTransitMs: transitMs,
+        elapsedSinceHostUpdateMs: elapsedSinceHostUpdateMs,
       ));
     } catch (_) {
       // A malformed event should not end an otherwise healthy room connection.

@@ -48,7 +48,7 @@ public class R2StorageService implements MediaStorageService {
               .contentType(contentType)
               .build(),
           RequestBody.fromInputStream(input, source.getSize()));
-      return new StoredMedia(key, fileName, contentType);
+      return new StoredMedia(key, fileName, contentType, source.getSize(), source.getSize(), false);
     } catch (S3Exception exception) {
       throw storageFailure("upload", exception);
     }

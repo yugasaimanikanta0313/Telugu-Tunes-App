@@ -330,6 +330,7 @@ class MusicController extends ChangeNotifier {
     await _repository.leaveRoom(activeRoom.id);
     room = null;
     _configureRoomPolling();
+    await _stopSharedRoomPlayback();
     await _refreshPublicRooms();
     notifyListeners();
   }
@@ -387,6 +388,7 @@ class MusicController extends ChangeNotifier {
       if (refreshed == null || refreshed.id != previous.id) {
         room = null;
         _configureRoomPolling();
+        await _stopSharedRoomPlayback();
         notifyListeners();
         return;
       }
@@ -472,10 +474,11 @@ class MusicController extends ChangeNotifier {
       activeRoom = room;
       if (activeRoom == null || activeRoom.track?.id != event.trackId) return;
     }
-    final adjustedPosition =
-        event.positionMs + (event.playing ? event.estimatedTransitMs : 0);
+    // expectedPosition = hostPosition + elapsedTimeSinceHostUpdate
+    final expectedPosition =
+        event.positionMs + (event.playing ? event.elapsedSinceHostUpdateMs : 0);
     final realtimeRoom = activeRoom.copyWith(
-      positionMs: adjustedPosition,
+      positionMs: expectedPosition,
       roomPlaying: event.playing,
     );
     room = realtimeRoom;
@@ -510,6 +513,15 @@ class MusicController extends ChangeNotifier {
     } finally {
       _synchronizingRoom = false;
     }
+  }
+
+  Future<void> _stopSharedRoomPlayback() async {
+    if (_audio.isAvailable) await _audio.stop();
+    current = null;
+    playing = false;
+    _position = Duration.zero;
+    _duration = null;
+    playerError = null;
   }
 
   Future<ImportReceipt> addImport(ImportRequest request) async {
@@ -566,10 +578,11 @@ class MusicController extends ChangeNotifier {
     await load();
   }
 
-  Future<void> replaceTrackAudio(
+  Future<AudioReplacementResult> replaceTrackAudio(
       Track track, String fileName, Uint8List bytes) async {
-    final updated =
+    final result =
         await _repository.replaceTrackAudio(track.id, fileName, bytes);
+    final updated = result.track;
     final wasPlaying = current?.id == track.id && playing;
     if (current?.id == track.id) {
       await _audio.invalidate(track.id);
@@ -579,6 +592,7 @@ class MusicController extends ChangeNotifier {
     }
     await load();
     if (wasPlaying) await play(updated);
+    return result;
   }
 
   Future<void> updateAlbum(Album album) async {

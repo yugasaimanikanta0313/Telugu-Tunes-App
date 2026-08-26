@@ -4,6 +4,7 @@ import com.telugutunes.api.api.dto.AlbumResponse;
 import com.telugutunes.api.api.dto.CollectionResponse;
 import com.telugutunes.api.api.dto.HomeResponse;
 import com.telugutunes.api.api.dto.TrackResponse;
+import com.telugutunes.api.api.dto.TrackAudioReplacementResponse;
 import com.telugutunes.api.api.dto.UpdateAlbumRequest;
 import com.telugutunes.api.api.dto.UpdateTrackRequest;
 import com.telugutunes.api.domain.AlbumDocument;
@@ -184,7 +185,8 @@ public class CatalogService {
   }
 
   /** Replaces the stored audio without changing the track's title, album, or other metadata. */
-  public TrackResponse replaceTrackAudio(String memberId, String trackId, MultipartFile file)
+  public TrackAudioReplacementResponse replaceTrackAudio(
+      String memberId, String trackId, MultipartFile file)
       throws IOException {
     auth.requireAdministrator(memberId);
     if (file == null || file.isEmpty()) {
@@ -228,7 +230,11 @@ public class CatalogService {
         // The new file is safely linked. A later Drive cleanup can remove an orphan if needed.
       }
     }
-    return TrackResponse.from(updated);
+    return new TrackAudioReplacementResponse(
+        TrackResponse.from(updated),
+        replacement.originalBytes(),
+        replacement.storedBytes(),
+        replacement.compressed());
   }
 
   public AlbumResponse updateAlbum(String memberId, String albumId, UpdateAlbumRequest request) {

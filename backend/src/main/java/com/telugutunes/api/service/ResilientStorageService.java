@@ -21,14 +21,19 @@ public class ResilientStorageService {
 
   private final Map<String, MediaStorageService> providers;
   private final AppProperties.Storage properties;
+  private final AudioCompressionService compression;
 
-  public ResilientStorageService(List<MediaStorageService> providers, AppProperties properties) {
+  public ResilientStorageService(
+      List<MediaStorageService> providers,
+      AppProperties properties,
+      AudioCompressionService compression) {
     this.providers = new LinkedHashMap<>();
     providers.forEach(provider -> this.providers.put(provider.providerName(), provider));
     if (this.providers.containsKey("s3")) {
       this.providers.put("r2", this.providers.get("s3"));
     }
     this.properties = properties.getStorage();
+    this.compression = compression;
   }
 
   public boolean isConfigured() {
@@ -36,30 +41,36 @@ public class ResilientStorageService {
   }
 
   public MediaStorageService.StoredMedia upload(MultipartFile source) throws IOException {
-    var primary = provider(properties.getPrimary());
-    MediaStorageService.StoredMedia primaryMedia;
-    try {
-      primaryMedia = primary.upload(source);
-    } catch (IOException primaryFailure) {
-      var backup = optionalProvider(properties.getBackup());
-      if (backup == null) throw primaryFailure;
-      log.warn("Primary storage upload failed; recovery provider is active.");
-      var backupMedia = backup.upload(source);
-      return withLocator(List.of(new Replica(backup.providerName(), backupMedia.objectId())), backupMedia);
-    }
-
-    var replicas = new ArrayList<Replica>();
-    replicas.add(new Replica(primary.providerName(), primaryMedia.objectId()));
-    var backup = optionalProvider(properties.getBackup());
-    if (backup != null && backup != primary) {
+    try (var prepared = compression.prepare(source)) {
+      var upload = prepared.file();
+      var primary = provider(properties.getPrimary());
+      MediaStorageService.StoredMedia primaryMedia;
       try {
-        var backupMedia = backup.upload(source);
-        replicas.add(new Replica(backup.providerName(), backupMedia.objectId()));
-      } catch (IOException backupFailure) {
-        log.warn("Backup storage replication is pending: {}", backupFailure.getMessage());
+        primaryMedia = primary.upload(upload);
+      } catch (IOException primaryFailure) {
+        var backup = optionalProvider(properties.getBackup());
+        if (backup == null) throw primaryFailure;
+        log.warn("Primary storage upload failed; recovery provider is active.");
+        var backupMedia = backup.upload(upload);
+        return withLocator(
+            List.of(new Replica(backup.providerName(), backupMedia.objectId())),
+            backupMedia,
+            prepared);
       }
+
+      var replicas = new ArrayList<Replica>();
+      replicas.add(new Replica(primary.providerName(), primaryMedia.objectId()));
+      var backup = optionalProvider(properties.getBackup());
+      if (backup != null && backup != primary) {
+        try {
+          var backupMedia = backup.upload(upload);
+          replicas.add(new Replica(backup.providerName(), backupMedia.objectId()));
+        } catch (IOException backupFailure) {
+          log.warn("Backup storage replication is pending: {}", backupFailure.getMessage());
+        }
+      }
+      return withLocator(replicas, primaryMedia, prepared);
     }
-    return withLocator(replicas, primaryMedia);
   }
 
   public MediaStorageService.StoredMediaInfo mediaInfo(String locator) throws IOException {
@@ -111,9 +122,16 @@ public class ResilientStorageService {
   }
 
   private MediaStorageService.StoredMedia withLocator(
-      List<Replica> replicas, MediaStorageService.StoredMedia media) {
+      List<Replica> replicas,
+      MediaStorageService.StoredMedia media,
+      AudioCompressionService.PreparedAudio prepared) {
     return new MediaStorageService.StoredMedia(
-        encode(replicas), media.fileName(), media.mimeType());
+        encode(replicas),
+        media.fileName(),
+        media.mimeType(),
+        prepared.originalBytes(),
+        prepared.storedBytes(),
+        prepared.compressed());
   }
 
   private MediaStorageService provider(String name) throws IOException {
