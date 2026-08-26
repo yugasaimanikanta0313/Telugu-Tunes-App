@@ -1,10 +1,13 @@
 package com.telugutunes.api.service;
 
 import com.telugutunes.api.api.dto.AssistantResponse;
+import com.telugutunes.api.api.dto.ArtworkCandidate;
 import com.telugutunes.api.api.dto.MetadataSuggestionResponse;
 import com.telugutunes.api.config.AppProperties;
 import java.time.Year;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -24,15 +27,23 @@ public class GeminiAssistantService {
   private final AppProperties properties;
   private final YouTubeMetadataService youtube;
   private final ItunesMetadataService itunes;
+  private final MusicBrainzCoverService musicBrainz;
+  private final SongQueryCleaner queryCleaner;
   private final RestClient client;
   private final RestClient groqClient;
   private final ObjectMapper mapper = new ObjectMapper();
 
   public GeminiAssistantService(
-      AppProperties properties, YouTubeMetadataService youtube, ItunesMetadataService itunes) {
+      AppProperties properties,
+      YouTubeMetadataService youtube,
+      ItunesMetadataService itunes,
+      MusicBrainzCoverService musicBrainz,
+      SongQueryCleaner queryCleaner) {
     this.properties = properties;
     this.youtube = youtube;
     this.itunes = itunes;
+    this.musicBrainz = musicBrainz;
+    this.queryCleaner = queryCleaner;
     this.client = RestClient.builder().baseUrl("https://generativelanguage.googleapis.com").build();
     this.groqClient = RestClient.builder().baseUrl("https://api.groq.com/openai/v1").build();
   }
@@ -55,9 +66,13 @@ public class GeminiAssistantService {
   public MetadataSuggestionResponse suggestMetadata(String query) {
     var fallback = fallback(query, "Verify every detail before saving.");
     var video = youtube.find(query).orElse(null);
-    var appleQuery = video == null ? query : video.title();
-    var apple = itunes.find(appleQuery).orElse(null);
-    var sourced = mergeSources(fallback, video, apple);
+    var rawCatalogQuery = video == null ? query : video.title();
+    var catalogQuery = queryCleaner.clean(rawCatalogQuery);
+    if (catalogQuery.isBlank()) catalogQuery = rawCatalogQuery;
+    var appleMatches = itunes.findCandidates(catalogQuery);
+    var apple = appleMatches.isEmpty() ? null : appleMatches.getFirst();
+    var artworkCandidates = artworkCandidates(video, appleMatches, catalogQuery);
+    var sourced = mergeSources(fallback, video, apple, artworkCandidates);
     if (!geminiConfigured()) {
       return groqMetadataOrSource(query, video, apple, sourced, "Gemini is not configured.");
     }
@@ -113,7 +128,8 @@ public class GeminiAssistantService {
             false,
             movieNotice(sourced.album(),
                 "Catalog details were found. " + geminiFailure + " " + groqFailure
-                    + " Review the credits or try again."));
+                    + " Review the credits or try again."),
+            sourced.artworkCandidates());
   }
 
   /** Returns a safe, actionable provider status without including request data or credentials. */
@@ -138,7 +154,8 @@ public class GeminiAssistantService {
       if (!color.matches("[0-9A-F]{6}")) color = "7C4DFF";
       return new MetadataSuggestionResponse(
           "", artist, album, singers, musicDirector, genre, year, color,
-          sourced.thumbnailUrl(), sourced.sourceUrl(), source, true, movieNotice(album, notice));
+          sourced.thumbnailUrl(), sourced.sourceUrl(), source, true, movieNotice(album, notice),
+          sourced.artworkCandidates());
   }
 
   private String metadataPrompt(
@@ -269,7 +286,8 @@ public class GeminiAssistantService {
         "",
         "Manual",
         false,
-        movieNotice("", notice));
+        movieNotice("", notice),
+        List.of());
   }
 
   private MetadataSuggestionResponse fromYouTube(YouTubeMetadataService.VideoMetadata video) {
@@ -291,31 +309,62 @@ public class GeminiAssistantService {
         video.sourceUrl(),
         "YouTube",
         false,
-        "YouTube details were found. Your song title is kept unchanged; Gemini can enrich the remaining credits.");
+        "YouTube details were found. Your song title is kept unchanged; Gemini can enrich the remaining credits.",
+        video.thumbnailUrl().isBlank()
+            ? List.of()
+            : List.of(new ArtworkCandidate(video.thumbnailUrl(), video.title(), video.channelTitle(),
+                "YouTube thumbnail", "YouTube fallback", video.sourceUrl())));
   }
 
   private MetadataSuggestionResponse mergeSources(
       MetadataSuggestionResponse fallback,
       YouTubeMetadataService.VideoMetadata video,
-      ItunesMetadataService.TrackMetadata apple) {
+      ItunesMetadataService.TrackMetadata apple,
+      List<ArtworkCandidate> artworkCandidates) {
     var youtubeDetails = video == null ? fallback : fromYouTube(video);
-    if (apple == null) return youtubeDetails;
+    var preferredArtwork = artworkCandidates.isEmpty()
+        ? youtubeDetails.thumbnailUrl()
+        : artworkCandidates.getFirst().imageUrl();
     return new MetadataSuggestionResponse(
         "",
-        choose(apple.artist(), youtubeDetails.artist()),
-        choose(youtubeDetails.album(), apple.collection()),
+        apple == null ? youtubeDetails.artist() : choose(apple.artist(), youtubeDetails.artist()),
+        apple == null ? youtubeDetails.album() : choose(youtubeDetails.album(), apple.collection()),
         youtubeDetails.singers(),
         youtubeDetails.musicDirector(),
-        choose(youtubeDetails.genre(), apple.genre()),
+        apple == null ? youtubeDetails.genre() : choose(youtubeDetails.genre(), apple.genre()),
         youtubeDetails.year(),
         youtubeDetails.color(),
-        // Prefer a square catalog cover. YouTube thumbnails are 16:9 and remain the fallback.
-        choose(apple.artworkUrl(), youtubeDetails.thumbnailUrl()),
-        choose(youtubeDetails.sourceUrl(), apple.sourceUrl()),
+        preferredArtwork,
+        apple == null
+            ? youtubeDetails.sourceUrl()
+            : choose(youtubeDetails.sourceUrl(), apple.sourceUrl()),
         sourceName(video, apple),
         false,
-        movieNotice(choose(youtubeDetails.album(), apple.collection()),
-            "Catalog details found. Gemini can enrich any missing credits."));
+        movieNotice(
+            apple == null ? youtubeDetails.album() : choose(youtubeDetails.album(), apple.collection()),
+            artworkCandidates.isEmpty()
+                ? "No clean catalog cover was found; the YouTube image remains optional."
+                : "Choose the correct square cover before saving."),
+        artworkCandidates);
+  }
+
+  private List<ArtworkCandidate> artworkCandidates(
+      YouTubeMetadataService.VideoMetadata video,
+      List<ItunesMetadataService.TrackMetadata> appleMatches,
+      String catalogQuery) {
+    var candidates = new ArrayList<ArtworkCandidate>();
+    appleMatches.stream().map(itunes::artworkCandidate).forEach(candidates::add);
+    candidates.addAll(musicBrainz.find(catalogQuery));
+    if (video != null && !video.thumbnailUrl().isBlank()) {
+      candidates.add(new ArtworkCandidate(video.thumbnailUrl(), video.title(), video.channelTitle(),
+          "YouTube thumbnail", "YouTube fallback", video.sourceUrl()));
+    }
+    var seen = new HashSet<String>();
+    return candidates.stream()
+        .filter(item -> item.imageUrl() != null && !item.imageUrl().isBlank())
+        .filter(item -> seen.add(item.imageUrl()))
+        .limit(6)
+        .toList();
   }
 
   private String sourceName(

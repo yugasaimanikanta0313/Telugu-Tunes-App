@@ -492,6 +492,7 @@ class MockMusicRepository implements MusicRepository {
         source: 'Manual',
         generated: false,
         notice: 'Connect the private API to request AI suggestions.',
+        artworkCandidates: const [],
       );
 
   @override

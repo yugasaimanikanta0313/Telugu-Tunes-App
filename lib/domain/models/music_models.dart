@@ -229,6 +229,7 @@ class TrackMetadataSuggestion {
     required this.source,
     required this.generated,
     required this.notice,
+    this.artworkCandidates = const [],
   });
 
   final String title;
@@ -244,6 +245,25 @@ class TrackMetadataSuggestion {
   final String source;
   final bool generated;
   final String notice;
+  final List<ArtworkCandidate> artworkCandidates;
+}
+
+class ArtworkCandidate {
+  const ArtworkCandidate({
+    required this.imageUrl,
+    required this.title,
+    required this.artist,
+    required this.album,
+    required this.source,
+    required this.sourceUrl,
+  });
+
+  final String imageUrl;
+  final String title;
+  final String artist;
+  final String album;
+  final String source;
+  final String sourceUrl;
 }
 
 class HomeData {

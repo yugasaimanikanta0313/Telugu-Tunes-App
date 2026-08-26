@@ -1,5 +1,7 @@
 package com.telugutunes.api.api.dto;
 
+import java.util.List;
+
 public record MetadataSuggestionResponse(
     String title,
     String artist,
@@ -13,4 +15,5 @@ public record MetadataSuggestionResponse(
     String sourceUrl,
     String source,
     boolean generated,
-    String notice) {}
+    String notice,
+    List<ArtworkCandidate> artworkCandidates) {}

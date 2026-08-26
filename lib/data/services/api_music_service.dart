@@ -403,6 +403,18 @@ class SpringBootMusicApiService implements MusicApiService {
       source: body['source'] as String? ?? 'Manual',
       generated: body['generated'] as bool? ?? false,
       notice: body['notice'] as String? ?? '',
+      artworkCandidates: (body['artworkCandidates'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => ArtworkCandidate(
+                imageUrl: item['imageUrl'] as String? ?? '',
+                title: item['title'] as String? ?? '',
+                artist: item['artist'] as String? ?? '',
+                album: item['album'] as String? ?? '',
+                source: item['source'] as String? ?? '',
+                sourceUrl: item['sourceUrl'] as String? ?? '',
+              ))
+          .where((item) => item.imageUrl.isNotEmpty)
+          .toList(),
     );
   }
 

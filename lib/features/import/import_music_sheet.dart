@@ -145,6 +145,11 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
       final result =
           await context.read<MusicController>().suggestMetadata(query);
       if (!mounted) return;
+      final currentArtwork = _artworkUrl.text.trim();
+      final selectedCover = result.artworkCandidates.isEmpty
+          ? null
+          : await showArtworkPicker(context, result.artworkCandidates);
+      if (!mounted) return;
       setState(() {
         // A YouTube video title is often promotional text, so never replace the member's title.
         _artist.text = result.artist;
@@ -153,7 +158,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         _musicDirector.text = result.musicDirector;
         _genre.text = result.genre;
         _color = result.color;
-        _artworkUrl.text = result.thumbnailUrl;
+        _artworkUrl.text = selectedCover?.imageUrl ?? currentArtwork;
         _sourceUrl = result.sourceUrl;
         _metadataSource = result.source;
         _metadataNotice = result.notice;
@@ -409,7 +414,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
                 : const Icon(Icons.auto_awesome_rounded),
             label: Text(_askingAi
                 ? 'Finding details…'
-                : 'Find details and square cover'),
+                : 'Find details and choose cover'),
           ),
           if (_artworkUrl.text.trim().isNotEmpty) ...[
             const SizedBox(height: 12),

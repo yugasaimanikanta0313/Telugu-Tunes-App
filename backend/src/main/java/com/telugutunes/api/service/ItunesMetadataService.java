@@ -1,10 +1,16 @@
 package com.telugutunes.api.service;
 
+import com.telugutunes.api.api.dto.ArtworkCandidate;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -13,10 +19,24 @@ import org.springframework.web.client.RestClient;
  */
 @Service
 public class ItunesMetadataService {
-  private final RestClient client = RestClient.builder().baseUrl("https://itunes.apple.com").build();
+  private final RestClient client = RestClient.builder()
+      .baseUrl("https://itunes.apple.com")
+      .requestFactory(requestFactory())
+      .build();
+
+  private static SimpleClientHttpRequestFactory requestFactory() {
+    var factory = new SimpleClientHttpRequestFactory();
+    factory.setConnectTimeout(Duration.ofSeconds(3));
+    factory.setReadTimeout(Duration.ofSeconds(5));
+    return factory;
+  }
 
   public Optional<TrackMetadata> find(String query) {
-    if (query == null || query.isBlank()) return Optional.empty();
+    return findCandidates(query).stream().findFirst();
+  }
+
+  public List<TrackMetadata> findCandidates(String query) {
+    if (query == null || query.isBlank()) return List.of();
     try {
       Map<?, ?> response = client.get()
           .uri(builder -> builder.path("/search")
@@ -29,17 +49,31 @@ public class ItunesMetadataService {
           .retrieve()
           .body(Map.class);
       if (response == null || !(response.get("results") instanceof List<?> results)) {
-        return Optional.empty();
+        return List.of();
       }
-      return results.stream()
+      var matches = results.stream()
           .filter(Map.class::isInstance)
           .map(Map.class::cast)
           .map(this::metadata)
-          .max((left, right) -> Integer.compare(score(left, query), score(right, query)));
+          .sorted(Comparator.comparingInt((TrackMetadata item) -> score(item, query)).reversed())
+          .toList();
+      var seen = new HashSet<String>();
+      var unique = new ArrayList<TrackMetadata>();
+      for (var match : matches) {
+        if (match.artworkUrl().isBlank() || !seen.add(match.artworkUrl())) continue;
+        unique.add(match);
+        if (unique.size() == 3) break;
+      }
+      return unique;
     } catch (RuntimeException ignored) {
       // Apple is optional. The existing YouTube and Gemini lookup still completes normally.
-      return Optional.empty();
+      return List.of();
     }
+  }
+
+  public ArtworkCandidate artworkCandidate(TrackMetadata item) {
+    return new ArtworkCandidate(item.artworkUrl(), item.title(), item.artist(),
+        item.collection(), "Apple Music", item.sourceUrl());
   }
 
   private TrackMetadata metadata(Map<?, ?> result) {

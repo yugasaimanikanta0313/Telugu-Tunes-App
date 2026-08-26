@@ -117,6 +117,92 @@ class Artwork extends StatelessWidget {
   }
 }
 
+Future<ArtworkCandidate?> showArtworkPicker(
+  BuildContext context,
+  List<ArtworkCandidate> candidates,
+) {
+  if (candidates.isEmpty) return Future.value(null);
+  return showDialog<ArtworkCandidate>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Choose song cover'),
+      content: SizedBox(
+        width: 640,
+        child: GridView.builder(
+          shrinkWrap: true,
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 210,
+            mainAxisExtent: 260,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemCount: candidates.length,
+          itemBuilder: (_, index) {
+            final candidate = candidates[index];
+            return InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => Navigator.pop(dialogContext, candidate),
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Artwork(
+                          color: '7C4DFF',
+                          label: candidate.album.isEmpty
+                              ? candidate.title
+                              : candidate.album,
+                          imageUrl: candidate.imageUrl,
+                          size: 150,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        candidate.title.isEmpty
+                            ? candidate.album
+                            : candidate.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      Text(
+                        candidate.artist.isEmpty
+                            ? candidate.source
+                            : candidate.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const Spacer(),
+                      Text(
+                        candidate.source,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: candidate.source == 'YouTube fallback'
+                                  ? Theme.of(context).colorScheme.error
+                                  : Theme.of(context).colorScheme.primary,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Keep current cover'),
+        ),
+      ],
+    ),
+  );
+}
+
 class SectionTitle extends StatelessWidget {
   const SectionTitle(
       {super.key, required this.title, this.action, this.onAction});
@@ -651,15 +737,20 @@ Future<void> showEditTrackDialog(BuildContext context, Track track) async {
                   .join(' ');
               final result = await music.suggestMetadata(query);
               if (!dialogContext.mounted) return;
-              if (result.thumbnailUrl.isEmpty) {
+              if (result.artworkCandidates.isEmpty) {
                 ScaffoldMessenger.of(dialogContext).showSnackBar(
                   const SnackBar(content: Text('No matching cover found.')),
                 );
                 return;
               }
-              artworkUrl.text = result.thumbnailUrl;
+              final selected = await showArtworkPicker(
+                dialogContext,
+                result.artworkCandidates,
+              );
+              if (!dialogContext.mounted || selected == null) return;
+              artworkUrl.text = selected.imageUrl;
               ScaffoldMessenger.of(dialogContext).showSnackBar(
-                SnackBar(content: Text('Cover found from ${result.source}.')),
+                SnackBar(content: Text('Selected ${selected.source} cover.')),
               );
             } catch (error) {
               if (dialogContext.mounted) {
