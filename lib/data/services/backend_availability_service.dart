@@ -54,7 +54,9 @@ class BackendAvailabilityService {
 
   static Uri _healthUriFor(String apiBaseUrl) {
     final apiUri = Uri.parse(apiBaseUrl);
-    return apiUri.replace(
-        path: '/actuator/health', query: null, fragment: null);
+    final apiPath = apiUri.path.endsWith('/')
+        ? apiUri.path.substring(0, apiUri.path.length - 1)
+        : apiUri.path;
+    return apiUri.replace(path: '$apiPath/home', query: null, fragment: null);
   }
 }
