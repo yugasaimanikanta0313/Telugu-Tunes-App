@@ -19,5 +19,11 @@ public class WebConfig implements WebMvcConfigurer {
         .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
         .allowedHeaders("*")
         .allowCredentials(true);
+
+    registry.addMapping("/actuator/health")
+        .allowedOriginPatterns(properties.getCors().getAllowedOrigins().toArray(String[]::new))
+        .allowedMethods("GET", "OPTIONS")
+        .allowedHeaders("*")
+        .allowCredentials(true);
   }
 }
