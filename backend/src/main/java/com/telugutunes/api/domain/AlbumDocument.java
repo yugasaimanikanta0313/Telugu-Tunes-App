@@ -13,6 +13,7 @@ public record AlbumDocument(
     String description,
     int year,
     String artworkColor,
+    String artworkUrl,
     boolean movie,
     List<String> trackIds,
     Instant createdAt) {}

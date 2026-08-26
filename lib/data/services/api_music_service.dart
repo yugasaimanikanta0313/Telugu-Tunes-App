@@ -228,6 +228,7 @@ class SpringBootMusicApiService implements MusicApiService {
           'description': album.description,
           'year': album.year,
           'color': album.color,
+          'artworkUrl': album.artworkUrl,
           'movie': album.isMovie,
         }),
       );
@@ -642,6 +643,7 @@ class SpringBootMusicApiService implements MusicApiService {
         description: json['description'] as String,
         year: json['year'] as int,
         color: json['color'] as String,
+        artworkUrl: json['artworkUrl'] as String? ?? '',
         isMovie: json['movie'] as bool? ?? false,
         tracks: _list(json['tracks']).map(_track).toList(),
       );

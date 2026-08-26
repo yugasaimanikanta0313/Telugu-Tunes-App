@@ -305,15 +305,12 @@ public class GeminiAssistantService {
         "",
         video.year(),
         "7C4DFF",
-        video.thumbnailUrl(),
+        "",
         video.sourceUrl(),
         "YouTube",
         false,
         "YouTube details were found. Your song title is kept unchanged; Gemini can enrich the remaining credits.",
-        video.thumbnailUrl().isBlank()
-            ? List.of()
-            : List.of(new ArtworkCandidate(video.thumbnailUrl(), video.title(), video.channelTitle(),
-                "YouTube thumbnail", "YouTube fallback", video.sourceUrl())));
+        List.of());
   }
 
   private MetadataSuggestionResponse mergeSources(
@@ -355,10 +352,6 @@ public class GeminiAssistantService {
     var candidates = new ArrayList<ArtworkCandidate>();
     appleMatches.stream().map(itunes::artworkCandidate).forEach(candidates::add);
     candidates.addAll(musicBrainz.find(catalogQuery));
-    if (video != null && !video.thumbnailUrl().isBlank()) {
-      candidates.add(new ArtworkCandidate(video.thumbnailUrl(), video.title(), video.channelTitle(),
-          "YouTube thumbnail", "YouTube fallback", video.sourceUrl()));
-    }
     var seen = new HashSet<String>();
     return candidates.stream()
         .filter(item -> item.imageUrl() != null && !item.imageUrl().isBlank())

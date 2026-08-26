@@ -11,4 +11,5 @@ public record UpdateAlbumRequest(
     @Size(max = 600) String description,
     @Min(0) @Max(2100) int year,
     @Size(max = 6) String color,
+    @Size(max = 2000) String artworkUrl,
     boolean movie) {}

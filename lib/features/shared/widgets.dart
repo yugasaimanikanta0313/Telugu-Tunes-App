@@ -180,9 +180,7 @@ Future<ArtworkCandidate?> showArtworkPicker(
                       Text(
                         candidate.source,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: candidate.source == 'YouTube fallback'
-                                  ? Theme.of(context).colorScheme.error
-                                  : Theme.of(context).colorScheme.primary,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                       ),
                     ],
@@ -310,11 +308,13 @@ class CollectionCard extends StatelessWidget {
       required this.subtitle,
       required this.color,
       required this.onTap,
+      this.imageUrl = '',
       this.movie = false});
 
   final String title;
   final String subtitle;
   final String color;
+  final String imageUrl;
   final VoidCallback onTap;
   final bool movie;
 
@@ -332,6 +332,7 @@ class CollectionCard extends StatelessWidget {
                 Artwork(
                     color: color,
                     label: title,
+                    imageUrl: imageUrl,
                     size: 142,
                     icon: movie
                         ? Icons.local_movies_rounded

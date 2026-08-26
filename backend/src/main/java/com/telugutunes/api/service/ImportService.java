@@ -136,6 +136,7 @@ public class ImportService {
                     "Tracks uploaded by your members.",
                     now.atZone(java.time.ZoneOffset.UTC).getYear(),
                     cleanColor,
+                    "",
                     false,
                     List.of(),
                     now));
@@ -149,6 +150,7 @@ public class ImportService {
             albumRecord.description(),
             albumRecord.year(),
             albumRecord.artworkColor(),
+            albumRecord.artworkUrl(),
             albumRecord.movie(),
             trackIds,
             albumRecord.createdAt()));

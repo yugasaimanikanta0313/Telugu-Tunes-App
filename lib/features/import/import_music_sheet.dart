@@ -531,7 +531,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Square catalog artwork is preferred. A YouTube fallback is shown uncropped. The image is linked, not copied into storage.',
+                'Square catalog artwork is preferred. YouTube thumbnails are not used. The image is linked, not copied into storage.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),

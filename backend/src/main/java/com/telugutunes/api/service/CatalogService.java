@@ -165,7 +165,7 @@ public class CatalogService {
       albums.save(
           new AlbumDocument(
               album.id(), album.title(), album.artist(), album.description(), album.year(),
-              album.artworkColor(), album.movie(), ids, album.createdAt()));
+              album.artworkColor(), album.artworkUrl(), album.movie(), ids, album.createdAt()));
     }
     for (var playlist : playlists.findAll()) {
       if (!playlist.trackIds().contains(trackId)) continue;
@@ -296,6 +296,9 @@ public class CatalogService {
                 cleanOrDefault(request.description(), existing.description()),
                 request.year() == 0 ? existing.year() : request.year(),
                 cleanColor(request.color(), existing.artworkColor()),
+                request.artworkUrl() == null
+                    ? existing.artworkUrl()
+                    : cleanUrl(request.artworkUrl()),
                 request.movie(),
                 existing.trackIds(),
                 existing.createdAt()));
@@ -342,6 +345,7 @@ public class CatalogService {
                     "Songs retained after an album grouping was removed.",
                     now.atZone(java.time.ZoneOffset.UTC).getYear(),
                     "7C4DFF",
+                    "",
                     false,
                     List.of(),
                     now));
@@ -376,6 +380,7 @@ public class CatalogService {
             unsorted.description(),
             unsorted.year(),
             unsorted.artworkColor(),
+            unsorted.artworkUrl(),
             unsorted.movie(),
             List.copyOf(unsortedTrackIds),
             unsorted.createdAt()));
@@ -383,6 +388,15 @@ public class CatalogService {
   }
 
   private AlbumResponse albumResponse(AlbumDocument album) {
+    var albumTracks = tracksByIds(album.trackIds());
+    var artworkUrl = cleanOrEmpty(album.artworkUrl());
+    if (artworkUrl.isBlank()) {
+      artworkUrl = albumTracks.stream()
+          .map(TrackResponse::artworkUrl)
+          .filter(value -> value != null && !value.isBlank())
+          .findFirst()
+          .orElse("");
+    }
     return new AlbumResponse(
         album.id(),
         album.title(),
@@ -390,8 +404,9 @@ public class CatalogService {
         album.description(),
         album.year(),
         album.artworkColor(),
+        artworkUrl,
         album.movie(),
-        tracksByIds(album.trackIds()));
+        albumTracks);
   }
 
   private void removeTrackFromAlbum(String albumId, String trackId) {
@@ -407,6 +422,7 @@ public class CatalogService {
                   album.description(),
                   album.year(),
                   album.artworkColor(),
+                  album.artworkUrl(),
                   album.movie(),
                   ids,
                   album.createdAt()));
@@ -426,6 +442,7 @@ public class CatalogService {
                     "Tracks uploaded by your members.",
                     now.atZone(java.time.ZoneOffset.UTC).getYear(),
                     track.artworkColor(),
+                    "",
                     false,
                     List.of(),
                     now));
@@ -439,6 +456,7 @@ public class CatalogService {
             album.description(),
             album.year(),
             album.artworkColor(),
+            album.artworkUrl(),
             album.movie(),
             List.copyOf(ids),
             album.createdAt()));

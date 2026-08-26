@@ -88,20 +88,18 @@ public class YouTubeMetadataService {
   }
 
   private VideoMetadata fromSnippet(String videoId, Map<?, ?> snippet) {
-    var thumbnail = thumbnailUrl(map(snippet.get("thumbnails")).orElse(Map.of()));
     var publishedAt = string(snippet.get("publishedAt"));
     var year = 0;
     try {
       year = OffsetDateTime.parse(publishedAt).getYear();
     } catch (RuntimeException ignored) {
-      // A missing or malformed date should not prevent useful title/thumbnail metadata.
+      // A missing or malformed date should not prevent useful title metadata.
     }
     return new VideoMetadata(
         string(snippet.get("title")),
         string(snippet.get("channelTitle")),
         string(snippet.get("description")),
         year,
-        thumbnail,
         "https://www.youtube.com/watch?v=" + videoId);
   }
 
@@ -129,17 +127,6 @@ public class YouTubeMetadataService {
     return Optional.empty();
   }
 
-  private String thumbnailUrl(Map<?, ?> thumbnails) {
-    for (var quality : List.of("maxres", "standard", "high", "medium", "default")) {
-      var image = map(thumbnails.get(quality));
-      if (image.isPresent()) {
-        var url = string(image.get().get("url"));
-        if (!url.isBlank()) return url;
-      }
-    }
-    return "";
-  }
-
   private Optional<Map<?, ?>> firstMap(Map<?, ?> response, String key) {
     if (response == null || !(response.get(key) instanceof List<?> items) || items.isEmpty()) {
       return Optional.empty();
@@ -160,6 +147,5 @@ public class YouTubeMetadataService {
       String channelTitle,
       String description,
       int year,
-      String thumbnailUrl,
       String sourceUrl) {}
 }

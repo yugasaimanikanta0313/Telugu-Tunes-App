@@ -121,6 +121,7 @@ class Album {
     required this.year,
     required this.color,
     required this.tracks,
+    this.artworkUrl = '',
     this.isMovie = false,
   });
 
@@ -130,6 +131,7 @@ class Album {
   final String description;
   final int year;
   final String color;
+  final String artworkUrl;
   final List<Track> tracks;
   final bool isMovie;
 }

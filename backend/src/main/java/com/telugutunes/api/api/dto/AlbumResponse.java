@@ -10,5 +10,6 @@ public record AlbumResponse(
     String description,
     int year,
     String color,
+    String artworkUrl,
     boolean movie,
     List<TrackResponse> tracks) {}

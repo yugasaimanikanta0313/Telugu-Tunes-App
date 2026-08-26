@@ -37,6 +37,7 @@ class AlbumDetailScreen extends StatelessWidget {
                         child: Artwork(
                           color: album.color,
                           label: album.title,
+                          imageUrl: album.artworkUrl,
                           size: 148,
                           icon: album.isMovie
                               ? Icons.local_movies_rounded
@@ -198,11 +199,13 @@ class AlbumDetailScreen extends StatelessWidget {
   }
 
   Future<void> _editAlbum(BuildContext context, Album album) async {
+    final music = context.read<MusicController>();
     final title = TextEditingController(text: album.title);
     final artist = TextEditingController(text: album.artist);
     final description = TextEditingController(text: album.description);
     final year = TextEditingController(text: album.year.toString());
     final color = TextEditingController(text: album.color);
+    final artworkUrl = TextEditingController(text: album.artworkUrl);
     var movie = album.isMovie;
     await showDialog<void>(
       context: context,
@@ -232,6 +235,66 @@ class AlbumDetailScreen extends StatelessWidget {
                     decoration: const InputDecoration(
                         labelText: 'Artwork color (hex)')),
                 const SizedBox(height: 10),
+                Artwork(
+                  color: album.color,
+                  label: title.text.trim().isEmpty ? album.title : title.text,
+                  imageUrl: artworkUrl.text.trim(),
+                  size: 132,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: artworkUrl,
+                  keyboardType: TextInputType.url,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Album artwork URL (optional)',
+                    helperText:
+                        'Leave empty to use the first song cover automatically.',
+                    prefixIcon: Icon(Icons.image_outlined),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      try {
+                        final query = [title.text, artist.text]
+                            .where((value) => value.trim().isNotEmpty)
+                            .join(' ');
+                        final result = await music.suggestMetadata(query);
+                        if (!dialogContext.mounted) return;
+                        if (result.artworkCandidates.isEmpty) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            const SnackBar(
+                                content: Text('No matching cover found.')),
+                          );
+                          return;
+                        }
+                        final selected = await showArtworkPicker(
+                          dialogContext,
+                          result.artworkCandidates,
+                        );
+                        if (!dialogContext.mounted || selected == null) return;
+                        artworkUrl.text = selected.imageUrl;
+                        setDialogState(() {});
+                      } catch (error) {
+                        if (dialogContext.mounted) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            SnackBar(
+                              content: Text(error
+                                  .toString()
+                                  .replaceFirst('Bad state: ', '')),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.image_search_rounded),
+                    label: const Text('Find album cover'),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 TextField(
                     controller: description,
                     maxLines: 3,
@@ -254,16 +317,17 @@ class AlbumDetailScreen extends StatelessWidget {
               onPressed: () async {
                 final parsedYear = int.tryParse(year.text.trim()) ?? album.year;
                 try {
-                  await context.read<MusicController>().updateAlbum(Album(
-                        id: album.id,
-                        title: title.text.trim(),
-                        artist: artist.text.trim(),
-                        description: description.text.trim(),
-                        year: parsedYear,
-                        color: color.text.trim(),
-                        tracks: album.tracks,
-                        isMovie: movie,
-                      ));
+                  await music.updateAlbum(Album(
+                    id: album.id,
+                    title: title.text.trim(),
+                    artist: artist.text.trim(),
+                    description: description.text.trim(),
+                    year: parsedYear,
+                    color: color.text.trim(),
+                    artworkUrl: artworkUrl.text.trim(),
+                    tracks: album.tracks,
+                    isMovie: movie,
+                  ));
                   if (!dialogContext.mounted) return;
                   Navigator.pop(dialogContext);
                   Navigator.pop(context);
@@ -287,6 +351,7 @@ class AlbumDetailScreen extends StatelessWidget {
     description.dispose();
     year.dispose();
     color.dispose();
+    artworkUrl.dispose();
   }
 
   Future<void> _confirmRemoveAlbum(BuildContext context, Album album) async {

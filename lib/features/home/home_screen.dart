@@ -110,6 +110,7 @@ class HomeScreen extends StatelessWidget {
                   title: track.title,
                   subtitle: track.artist,
                   color: track.color,
+                  imageUrl: track.artworkUrl,
                   onTap: () => controller.play(track),
                 );
               },
@@ -133,6 +134,7 @@ class HomeScreen extends StatelessWidget {
                       ? 'Movie • ' + album.year.toString()
                       : album.artist,
                   color: album.color,
+                  imageUrl: album.artworkUrl,
                   movie: album.isMovie,
                   onTap: () => Navigator.push(
                       context,
@@ -185,6 +187,7 @@ class HomeScreen extends StatelessWidget {
                                     Artwork(
                                         color: track.color,
                                         label: track.album,
+                                        imageUrl: track.artworkUrl,
                                         size: 58),
                                     const SizedBox(width: 10),
                                     Expanded(
