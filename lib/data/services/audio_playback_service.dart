@@ -48,7 +48,9 @@ class AudioPlaybackService {
           'Connect the private API before playing uploaded audio.');
     }
     if (_loadedTrackId != trackId) await _load(trackId);
-    await _player.play();
+    // just_audio's play future can remain pending until playback stops. Do not
+    // hold room synchronization or UI actions for the duration of the song.
+    unawaited(_player.play());
   }
 
   /// Brings a guest close to the host clock without restarting audio unless needed.
@@ -68,11 +70,11 @@ class AudioPlaybackService {
       final caughtUpTarget =
           shouldPlay ? safeTarget + loading.elapsed : safeTarget;
       await _player.seek(caughtUpTarget);
-    } else if ((_player.position - safeTarget).inMilliseconds.abs() > 200) {
+    } else if ((_player.position - safeTarget).inMilliseconds.abs() > 750) {
       await _player.seek(safeTarget);
     }
     if (shouldPlay && !_player.playing) {
-      await _player.play();
+      unawaited(_player.play());
     } else if (!shouldPlay && _player.playing) {
       await _player.pause();
     }
@@ -99,7 +101,7 @@ class AudioPlaybackService {
     if (_player.playing) {
       await _player.pause();
     } else if (_loadedTrackId != null) {
-      await _player.play();
+      unawaited(_player.play());
     }
   }
 
