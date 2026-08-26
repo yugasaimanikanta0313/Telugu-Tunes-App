@@ -15,6 +15,7 @@ public record TrackResponse(
     String genre,
     String artworkUrl,
     String sourceUrl,
+    String audioVersion,
     boolean downloaded) {
 
   public static TrackResponse from(TrackDocument track) {
@@ -31,6 +32,7 @@ public record TrackResponse(
         track.genre(),
         track.artworkUrl(),
         track.sourceUrl(),
+        Integer.toHexString(java.util.Objects.hash(track.driveFileId(), track.mimeType())),
         false);
   }
 }

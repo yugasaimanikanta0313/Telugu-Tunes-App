@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -50,12 +51,12 @@ class Artwork extends StatelessWidget {
               offset: const Offset(0, 8)),
         ],
       ),
-      child: SizedBox(width: size, height: size, child: _content()),
+      child: SizedBox(width: size, height: size, child: _content(context)),
     );
     return heroTag == null ? artwork : Hero(tag: heroTag!, child: artwork);
   }
 
-  Widget _content() {
+  Widget _content(BuildContext context) {
     final placeholder = Stack(
       children: [
         Positioned(
@@ -85,10 +86,14 @@ class Artwork extends StatelessWidget {
     if (imageUrl.isEmpty) return placeholder;
     return ClipRRect(
       borderRadius: BorderRadius.circular(size * .18),
-      child: Image.network(
-        imageUrl,
+      child: CachedNetworkImage(
+        imageUrl: imageUrl,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => placeholder,
+        memCacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+        memCacheHeight: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+        fadeInDuration: const Duration(milliseconds: 180),
+        placeholder: (_, __) => placeholder,
+        errorWidget: (_, __, ___) => placeholder,
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import '../../domain/models/music_models.dart';
@@ -25,6 +26,8 @@ abstract class MusicRepository {
     bool? active,
     bool? isAdmin,
   });
+  Future<Uint8List> exportBackup();
+  Future<void> restoreBackup(Uint8List bytes);
   Future<ImportReceipt> importMusic(ImportRequest request);
   Future<ImportReceipt> uploadAudio(
     String fileName,
@@ -106,6 +109,10 @@ class SpringBootMusicRepository implements MusicRepository {
     bool? isAdmin,
   }) =>
       _api.updateAdminMember(memberId, active: active, isAdmin: isAdmin);
+  @override
+  Future<Uint8List> exportBackup() => _api.exportBackup();
+  @override
+  Future<void> restoreBackup(Uint8List bytes) => _api.restoreBackup(bytes);
   @override
   Future<ImportReceipt> importMusic(ImportRequest request) =>
       _api.importMusic(request);
@@ -412,6 +419,14 @@ class MockMusicRepository implements MusicRepository {
     bool? isAdmin,
   }) =>
       Future.error(StateError('Member management needs the private backend.'));
+
+  @override
+  Future<Uint8List> exportBackup() async => Uint8List.fromList(utf8.encode(
+        '{"schemaVersion":1,"tracks":[],"albums":[],"playlists":[],"lyrics":[]}',
+      ));
+
+  @override
+  Future<void> restoreBackup(Uint8List bytes) async {}
 
   @override
   Future<List<Track>> search(String query) async {

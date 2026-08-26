@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/repositories/music_repository.dart';
 import '../data/services/audio_playback_service.dart';
+import '../data/services/artwork_palette_service.dart';
 import '../data/services/offline_download_service.dart';
 import '../data/services/room_realtime_service.dart';
 import '../domain/models/music_models.dart';
@@ -19,6 +20,7 @@ class MusicController extends ChangeNotifier {
     this.memberId = '',
     this.isAdmin = false,
   }) {
+    _palette = ArtworkPaletteService();
     _offline = OfflineDownloadService(apiBaseUrl, authToken);
     _audio = AudioPlaybackService(
       apiBaseUrl,
@@ -50,6 +52,7 @@ class MusicController extends ChangeNotifier {
         playing = false;
         notifyListeners();
       }),
+      _audio.trackChangedStream.listen(_audioTrackChanged),
       _audio.completedStream.listen((_) => unawaited(_playNextRoomTrack())),
     ];
   }
@@ -62,6 +65,7 @@ class MusicController extends ChangeNotifier {
   final String memberId;
   final bool isAdmin;
   late final AudioPlaybackService _audio;
+  late final ArtworkPaletteService _palette;
   late final OfflineDownloadService _offline;
   late final RoomRealtimeService _roomRealtime;
   late final List<StreamSubscription<dynamic>> _subscriptions;
@@ -96,6 +100,7 @@ class MusicController extends ChangeNotifier {
   String? playerError;
   bool shuffleEnabled = false;
   bool repeatEnabled = false;
+  int themeColorValue = 0xffe15184;
   RoomConnectionStatus roomConnectionStatus = RoomConnectionStatus.disconnected;
   int roomDriftMs = 0;
   TrackLyrics? currentLyrics;
@@ -168,7 +173,10 @@ class MusicController extends ChangeNotifier {
       loadError = error.toString().replaceFirst('Bad state: ', '');
     }
     current ??= recentlyPlayed.firstOrNull ?? allTracks.firstOrNull;
-    if (current != null) unawaited(loadLyrics(current!));
+    if (current != null) {
+      unawaited(loadLyrics(current!));
+      unawaited(_updateArtworkTheme(current!));
+    }
     _configureRoomPolling();
     _configurePublicRoomPolling();
     loading = false;
@@ -193,6 +201,7 @@ class MusicController extends ChangeNotifier {
       return;
     }
     current = track;
+    unawaited(_updateArtworkTheme(track));
     unawaited(loadLyrics(track));
     playerError = null;
     _position = Duration.zero;
@@ -205,7 +214,10 @@ class MusicController extends ChangeNotifier {
     playing = true;
     notifyListeners();
     try {
-      await _audio.play(track);
+      await _audio.play(
+        track,
+        queue: room == null ? allTracks : [track],
+      );
       _publishRealtimeRoomPlayback();
       unawaited(_publishRoomPlayback());
     } catch (error) {
@@ -246,6 +258,7 @@ class MusicController extends ChangeNotifier {
 
   Future<void> skipNext() async {
     if (allTracks.isEmpty) return;
+    if (room == null && _audio.isAvailable && await _audio.skipNext()) return;
     final index = allTracks.indexWhere((track) => track.id == current?.id);
     await play(allTracks[(index + 1) % allTracks.length]);
   }
@@ -274,6 +287,9 @@ class MusicController extends ChangeNotifier {
 
   Future<void> skipPrevious() async {
     if (allTracks.isEmpty) return;
+    if (room == null && _audio.isAvailable && await _audio.skipPrevious()) {
+      return;
+    }
     final index = allTracks.indexWhere((track) => track.id == current?.id);
     await play(allTracks[(index - 1 + allTracks.length) % allTracks.length]);
   }
@@ -341,11 +357,31 @@ class MusicController extends ChangeNotifier {
 
   void toggleShuffle() {
     shuffleEnabled = !shuffleEnabled;
+    unawaited(_audio.setShuffle(shuffleEnabled));
     notifyListeners();
   }
 
   void toggleRepeat() {
     repeatEnabled = !repeatEnabled;
+    unawaited(_audio.setRepeat(repeatEnabled));
+    notifyListeners();
+  }
+
+  void _audioTrackChanged(String trackId) {
+    if (room != null) return;
+    Track? track;
+    for (final item in allTracks) {
+      if (item.id == trackId) {
+        track = item;
+        break;
+      }
+    }
+    if (track == null || current?.id == track.id) return;
+    current = track;
+    _position = Duration.zero;
+    playerError = null;
+    unawaited(loadLyrics(track));
+    unawaited(_updateArtworkTheme(track));
     notifyListeners();
   }
 
@@ -579,7 +615,10 @@ class MusicController extends ChangeNotifier {
   Future<void> _applyRoomSynchronization(ListeningRoom activeRoom) async {
     final track = activeRoom.track;
     if (track == null) return;
-    if (current?.id != track.id) unawaited(loadLyrics(track));
+    if (current?.id != track.id) {
+      unawaited(loadLyrics(track));
+      unawaited(_updateArtworkTheme(track));
+    }
     current = track;
     final target = Duration(
       milliseconds: activeRoom.positionMs.clamp(0, 1 << 31).toInt(),
@@ -722,6 +761,22 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _updateArtworkTheme(Track track) async {
+    final clean = track.color.replaceFirst('#', '');
+    final fallback = int.tryParse('ff$clean', radix: 16) ?? 0xffe15184;
+    if (themeColorValue != fallback) {
+      themeColorValue = fallback;
+      notifyListeners();
+    }
+    final extracted = await _palette.dominantColor(track.artworkUrl);
+    if (extracted != null &&
+        current?.id == track.id &&
+        themeColorValue != extracted) {
+      themeColorValue = extracted;
+      notifyListeners();
+    }
+  }
+
   Future<ImportReceipt> addImport(ImportRequest request) async {
     final receipt = await _repository.importMusic(request);
     imports.insert(0, receipt);
@@ -817,6 +872,13 @@ class MusicController extends ChangeNotifier {
     bool? isAdmin,
   }) =>
       _repository.updateAdminMember(memberId, active: active, isAdmin: isAdmin);
+
+  Future<Uint8List> exportBackup() => _repository.exportBackup();
+
+  Future<void> restoreBackup(Uint8List bytes) async {
+    await _repository.restoreBackup(bytes);
+    await load(announce: true);
+  }
 
   Future<TrackMetadataSuggestion> suggestMetadata(String query) =>
       _repository.suggestMetadata(query);

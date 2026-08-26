@@ -36,6 +36,8 @@ abstract class MusicApiService {
     bool? active,
     bool? isAdmin,
   });
+  Future<Uint8List> exportBackup();
+  Future<void> restoreBackup(Uint8List bytes);
   Future<ImportReceipt> importMusic(ImportRequest request);
   Future<ImportReceipt> uploadAudio(
     String fileName,
@@ -290,6 +292,30 @@ class SpringBootMusicApiService implements MusicApiService {
         if (active != null) 'active': active,
         if (isAdmin != null) 'admin': isAdmin,
       }));
+
+  @override
+  Future<Uint8List> exportBackup() async {
+    final response = await _client.get(
+      Uri.parse(config.baseUrl + '/admin/backup'),
+      headers: _headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(_errorMessage(response));
+    }
+    return response.bodyBytes;
+  }
+
+  @override
+  Future<void> restoreBackup(Uint8List bytes) async {
+    final response = await _client.post(
+      Uri.parse(config.baseUrl + '/admin/backup'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: bytes,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(_errorMessage(response));
+    }
+  }
 
   @override
   Future<ImportReceipt> importMusic(ImportRequest request) async {
@@ -581,6 +607,7 @@ class SpringBootMusicApiService implements MusicApiService {
         genre: json['genre'] as String? ?? '',
         artworkUrl: json['artworkUrl'] as String? ?? '',
         sourceUrl: json['sourceUrl'] as String? ?? '',
+        audioVersion: json['audioVersion'] as String? ?? '',
         downloaded: json['downloaded'] as bool? ?? false,
       );
 

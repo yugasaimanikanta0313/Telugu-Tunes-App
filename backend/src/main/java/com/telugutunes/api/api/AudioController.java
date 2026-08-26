@@ -51,8 +51,9 @@ public class AudioController {
     response.setHeader(HttpHeaders.ACCEPT_RANGES, "bytes");
     // Audio may be replaced while keeping the same library entry. Do not let a browser reuse an
     // older response for that entry after the replacement is complete.
-    response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store, max-age=0, must-revalidate");
-    response.setHeader("Pragma", "no-cache");
+    // The Flutter client includes a media-version query derived from the stored object ID.
+    // Replaced audio receives a new version while unchanged audio can use a bounded private cache.
+    response.setHeader(HttpHeaders.CACHE_CONTROL, "private, max-age=3600, must-revalidate");
     response.setHeader(HttpHeaders.CONTENT_LENGTH, Long.toString(range.length()));
     if (range.partial()) {
       response.setHeader(

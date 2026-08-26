@@ -36,7 +36,13 @@ public class LyricsService {
   }
 
   public LyricsResponse get(String trackId) {
-    return response(lyrics.findById(trackId).orElseGet(() -> importFromLrclib(trackId, "system")));
+    var cached = lyrics.findById(trackId);
+    if (cached.isPresent()
+        && !("unavailable".equals(cached.get().source())
+            && cached.get().updatedAt().isBefore(Instant.now().minus(Duration.ofHours(6))))) {
+      return response(cached.get());
+    }
+    return response(importFromLrclib(trackId, "system"));
   }
 
   public LyricsResponse refresh(String memberId, String trackId) {
@@ -63,30 +69,90 @@ public class LyricsService {
     var track = catalog.trackDocument(trackId);
     var now = Instant.now();
     try {
-      var uri = URI.create(LRCLIB
+      var exactUri = URI.create(LRCLIB
           + "?track_name=" + encode(track.title())
           + "&artist_name=" + encode(track.artist())
           + "&album_name=" + encode(track.album())
           + "&duration=" + Math.max(0, track.durationSeconds()));
-      var request = HttpRequest.newBuilder(uri)
-          .timeout(Duration.ofSeconds(8))
-          .header("Accept", "application/json")
-          .header("User-Agent", "TeluguTunes/1.0 (https://github.com/yugasaimanikanta0313/Telugu-Tunes-App)")
-          .GET()
-          .build();
-      var result = http.send(request, HttpResponse.BodyHandlers.ofString());
-      if (result.statusCode() >= 200 && result.statusCode() < 300) {
-        JsonNode body = json.readTree(result.body());
-        var plain = body.path("plainLyrics").asText("").trim();
-        var synced = body.path("syncedLyrics").asText("").trim();
-        return lyrics.save(new LyricsDocument(
-            trackId, "te", "lrclib", plain, synced, updatedBy, now));
+      JsonNode match = requestJson(exactUri);
+      var source = "lrclib-exact";
+      if (match == null) {
+        // Imported albums often contain placeholders such as "Imported music".
+        // Search is deliberately used only after the exact signature misses.
+        Thread.sleep(300);
+        var searchUri = URI.create("https://lrclib.net/api/search"
+            + "?track_name=" + encode(track.title())
+            + "&artist_name=" + encode(track.artist()));
+        match = bestSearchResult(requestJson(searchUri), track.title(), track.artist(), track.durationSeconds());
+        source = "lrclib-search";
+      }
+      if (match == null) {
+        Thread.sleep(300);
+        var broadUri = URI.create("https://lrclib.net/api/search?q="
+            + encode(track.title() + " " + track.artist()));
+        match = bestSearchResult(requestJson(broadUri), track.title(), track.artist(), track.durationSeconds());
+        source = "lrclib-search";
+      }
+      if (match != null) {
+        var plain = match.path("plainLyrics").asText("").trim();
+        var synced = match.path("syncedLyrics").asText("").trim();
+        if (!plain.isBlank() || !synced.isBlank()) {
+          return lyrics.save(new LyricsDocument(
+              trackId, "te", source, plain, synced, updatedBy, now));
+        }
       }
     } catch (Exception ignored) {
       // An empty cached result keeps playback independent from the community API.
     }
     return lyrics.save(new LyricsDocument(
         trackId, "te", "unavailable", "", "", updatedBy, now));
+  }
+
+  private JsonNode requestJson(URI uri) throws Exception {
+    var request = HttpRequest.newBuilder(uri)
+        .timeout(Duration.ofSeconds(8))
+        .header("Accept", "application/json")
+        .header("User-Agent", "TeluguTunes/1.0 (https://github.com/yugasaimanikanta0313/Telugu-Tunes-App)")
+        .GET()
+        .build();
+    var result = http.send(request, HttpResponse.BodyHandlers.ofString());
+    return result.statusCode() >= 200 && result.statusCode() < 300
+        ? json.readTree(result.body())
+        : null;
+  }
+
+  private JsonNode bestSearchResult(JsonNode results, String title, String artist, int durationSeconds) {
+    if (results == null || !results.isArray() || results.isEmpty()) return null;
+    JsonNode best = null;
+    var bestScore = Integer.MIN_VALUE;
+    for (var candidate : results) {
+      var candidateTitle = normalize(candidate.path("trackName").asText(candidate.path("name").asText("")));
+      var candidateArtist = normalize(candidate.path("artistName").asText(""));
+      var wantedTitle = normalize(title);
+      var wantedArtist = normalize(artist);
+      var score = 0;
+      if (candidateTitle.equals(wantedTitle)) score += 100;
+      else if (candidateTitle.contains(wantedTitle) || wantedTitle.contains(candidateTitle)) score += 55;
+      if (candidateArtist.equals(wantedArtist)) score += 45;
+      else if (candidateArtist.contains(wantedArtist) || wantedArtist.contains(candidateArtist)) score += 20;
+      var durationDifference = Math.abs(candidate.path("duration").asInt(0) - durationSeconds);
+      if (durationDifference <= 2) score += 30;
+      else if (durationDifference <= 10) score += 10;
+      if (!candidate.path("syncedLyrics").asText("").isBlank()) score += 8;
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+    return bestScore >= 55 ? best : null;
+  }
+
+  private String normalize(String value) {
+    return blankDefault(value, "").toLowerCase(java.util.Locale.ROOT)
+        .replaceAll("(?i)\\b(official|video|lyrical|song|full|telugu|audio|hd|4k)\\b", " ")
+        .replaceAll("[^\\p{L}\\p{N}]+", " ")
+        .trim()
+        .replaceAll("\\s+", " ");
   }
 
   private LyricsResponse response(LyricsDocument value) {

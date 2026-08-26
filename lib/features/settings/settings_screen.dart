@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -50,17 +51,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (controller.isAdmin) ...[
           const SectionTitle(title: 'Administration'),
           Card(
-            child: ListTile(
-              leading: const Icon(Icons.manage_accounts_outlined),
-              title: const Text('Manage member accounts'),
-              subtitle: const Text('Administrator access and active accounts'),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const MemberManagementScreen()),
+            child: Column(children: [
+              ListTile(
+                leading: const Icon(Icons.manage_accounts_outlined),
+                title: const Text('Manage member accounts'),
+                subtitle:
+                    const Text('Administrator access and active accounts'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const MemberManagementScreen()),
+                ),
               ),
-            ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.backup_outlined),
+                title: const Text('Export metadata backup'),
+                subtitle: const Text(
+                    'Songs, albums, playlists and lyrics; audio stays in S3'),
+                trailing: const Icon(Icons.download_rounded),
+                onTap: () => _exportBackup(controller),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.restore_rounded),
+                title: const Text('Restore metadata backup'),
+                subtitle: const Text('Safely merges a Telugu Tunes JSON file'),
+                trailing: const Icon(Icons.upload_file_rounded),
+                onTap: () => _restoreBackup(controller),
+              ),
+            ]),
           ),
         ],
         const SectionTitle(title: 'Playback & downloads'),
@@ -90,6 +111,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle:
                   const Text('Applied when your storage backend supports it'),
             ),
+            const Divider(height: 1),
+            const ListTile(
+              leading: Icon(Icons.queue_music_rounded),
+              title: Text('Gapless queue'),
+              subtitle: Text('The next song is prepared before this one ends'),
+              trailing: Icon(Icons.check_circle_rounded),
+            ),
+            const Divider(height: 1),
+            const ListTile(
+              leading: Icon(Icons.palette_outlined),
+              title: Text('Artwork-based theme'),
+              subtitle: Text('Player colors follow the current cover art'),
+              trailing: Icon(Icons.check_circle_rounded),
+            ),
           ]),
         ),
         const SectionTitle(title: 'Your music'),
@@ -106,12 +141,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 leading: const Icon(Icons.storage_rounded),
                 title: const Text('Offline storage'),
                 subtitle: Text(controller.downloaded.length.toString() +
-                    ' tracks currently marked'),
+                    ' tracks saved on this device'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                         content: Text(
-                            'Downloads are marked locally. Audio caching will activate after private storage is configured.')))),
+                            'Downloaded songs remain available without internet.')))),
+            const Divider(height: 1),
+            const ListTile(
+              leading: Icon(Icons.memory_rounded),
+              title: Text('Bounded cache memory'),
+              subtitle: Text(
+                  'Artwork memory capped at 80 MB; streamed audio reuses a 1-hour private cache'),
+              trailing: Icon(Icons.check_circle_rounded),
+            ),
           ]),
         ),
         const SectionTitle(title: 'Connection status'),
@@ -159,5 +202,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4)),
       ],
     );
+  }
+
+  Future<void> _exportBackup(MusicController controller) async {
+    try {
+      final bytes = await controller.exportBackup();
+      await FilePicker.saveFile(
+        dialogTitle: 'Save Telugu Tunes backup',
+        fileName: 'telugu-tunes-backup.json',
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        bytes: bytes,
+      );
+      if (mounted) _showMessage('Metadata backup exported.');
+    } catch (error) {
+      if (mounted) _showMessage(_cleanError(error), error: true);
+    }
+  }
+
+  Future<void> _restoreBackup(MusicController controller) async {
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+      withData: true,
+    );
+    if (picked == null || !mounted) return;
+    final bytes = picked.files.single.bytes;
+    if (bytes == null) {
+      _showMessage('Could not read the selected backup.', error: true);
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Restore this backup?'),
+            content: const Text(
+                'Songs, albums, playlists and lyrics will be merged. Existing records not present in the backup will not be deleted.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Restore'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) return;
+    try {
+      await controller.restoreBackup(bytes);
+      if (mounted) _showMessage('Backup restored and catalog refreshed.');
+    } catch (error) {
+      if (mounted) _showMessage(_cleanError(error), error: true);
+    }
+  }
+
+  String _cleanError(Object error) =>
+      error.toString().replaceFirst('Bad state: ', '');
+
+  void _showMessage(String message, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: error ? Theme.of(context).colorScheme.error : null,
+    ));
   }
 }

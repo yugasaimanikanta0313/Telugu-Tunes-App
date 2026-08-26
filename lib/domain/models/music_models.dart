@@ -54,6 +54,7 @@ class Track {
     this.genre = '',
     this.artworkUrl = '',
     this.sourceUrl = '',
+    this.audioVersion = '',
     this.downloaded = false,
     this.isExplicit = false,
   });
@@ -70,6 +71,7 @@ class Track {
   final String genre;
   final String artworkUrl;
   final String sourceUrl;
+  final String audioVersion;
   final bool downloaded;
   final bool isExplicit;
 
@@ -86,6 +88,7 @@ class Track {
         genre: genre,
         artworkUrl: artworkUrl,
         sourceUrl: sourceUrl,
+        audioVersion: audioVersion,
         downloaded: downloaded ?? this.downloaded,
         isExplicit: isExplicit,
       );

@@ -29,6 +29,7 @@ class AudioPlaybackService {
       _player.positionStream.listen((value) => _position.add(value)),
       _player.durationStream.listen((value) => _duration.add(value)),
       _player.playerStateStream.listen((value) => _playing.add(value.playing)),
+      _player.currentIndexStream.listen(_currentIndexChanged),
       _player.playerStateStream
           .where((value) => value.processingState == ProcessingState.completed)
           .listen((_) => _completed.add(null)),
@@ -46,8 +47,11 @@ class AudioPlaybackService {
   final _playing = StreamController<bool>.broadcast();
   final _errors = StreamController<String>.broadcast();
   final _completed = StreamController<void>.broadcast();
+  final _trackChanged = StreamController<String>.broadcast();
   late final List<StreamSubscription<dynamic>> _subscriptions;
   String? _loadedTrackId;
+  List<Track> _queueTracks = const [];
+  List<String> _queueIds = const [];
   Timer? _speedResetTimer;
   DateTime? _lastHardSeekAt;
   double _speed = 1;
@@ -58,15 +62,23 @@ class AudioPlaybackService {
   Stream<bool> get playingStream => _playing.stream;
   Stream<String> get errorStream => _errors.stream;
   Stream<void> get completedStream => _completed.stream;
+  Stream<String> get trackChangedStream => _trackChanged.stream;
   Duration get position => _player.position;
   bool get isPlaying => _player.playing;
 
-  Future<void> play(Track track) async {
+  Future<void> play(Track track, {List<Track> queue = const []}) async {
     if (!isAvailable) {
       throw StateError(
           'Connect the private API before playing uploaded audio.');
     }
-    if (_loadedTrackId != track.id) await _load(track);
+    final requestedQueue = _normalizedQueue(track, queue);
+    final requestedIds = requestedQueue.map((item) => item.id).toList();
+    final index = requestedIds.indexOf(track.id);
+    if (!_sameQueue(requestedIds)) {
+      await _loadQueue(requestedQueue, initialIndex: index);
+    } else if (_player.currentIndex != index) {
+      await _player.seek(Duration.zero, index: index);
+    }
     await _setSpeed(1);
     unawaited(_player.play());
   }
@@ -85,7 +97,7 @@ class AudioPlaybackService {
     final safeTarget = target.isNegative ? Duration.zero : target;
     if (_loadedTrackId != track.id) {
       final loading = Stopwatch()..start();
-      await _load(track);
+      await _loadQueue([track]);
       loading.stop();
       final caughtUpTarget =
           shouldPlay ? safeTarget + loading.elapsed : safeTarget;
@@ -129,19 +141,36 @@ class AudioPlaybackService {
         kind: SyncCorrectionKind.gentleSpeed, driftMs: driftMs);
   }
 
-  Future<void> _load(Track track) async {
+  Future<void> _loadQueue(
+    List<Track> tracks, {
+    int initialIndex = 0,
+  }) async {
     await _player.stop();
     _loadedTrackId = null;
     await _setSpeed(1);
+    _queueTracks = tracks;
+    _queueIds = tracks.map((track) => track.id).toList(growable: false);
+    final sources = <AudioSource>[];
+    for (final track in tracks) {
+      sources.add(await _sourceForTrack(track));
+    }
+    await _player.setAudioSources(
+      sources,
+      initialIndex: initialIndex.clamp(0, tracks.length - 1),
+    );
+    _loadedTrackId = tracks[initialIndex].id;
+  }
+
+  Future<AudioSource> _sourceForTrack(Track track) async {
     final localPath = await _localPathForTrack(track.id);
     final uri = localPath == null
         ? Uri.parse('$_apiBaseUrl/audio/${track.id}').replace(
             queryParameters: {
-              'playback': DateTime.now().microsecondsSinceEpoch.toString(),
+              'v': track.audioVersion.isEmpty ? track.id : track.audioVersion,
             },
           )
         : Uri.file(localPath);
-    await _player.setAudioSource(AudioSource.uri(
+    return AudioSource.uri(
       uri,
       headers: localPath == null && _authToken.isNotEmpty
           ? {'Authorization': 'Bearer $_authToken'}
@@ -154,8 +183,32 @@ class AudioPlaybackService {
         artUri:
             track.artworkUrl.isEmpty ? null : Uri.tryParse(track.artworkUrl),
       ),
-    ));
-    _loadedTrackId = track.id;
+    );
+  }
+
+  List<Track> _normalizedQueue(Track track, List<Track> queue) {
+    final deduplicated = <String, Track>{};
+    for (final item in queue) {
+      deduplicated[item.id] = item;
+    }
+    deduplicated.putIfAbsent(track.id, () => track);
+    return deduplicated.values.toList(growable: false);
+  }
+
+  bool _sameQueue(List<String> ids) {
+    if (ids.length != _queueIds.length) return false;
+    for (var index = 0; index < ids.length; index++) {
+      if (ids[index] != _queueIds[index]) return false;
+    }
+    return true;
+  }
+
+  void _currentIndexChanged(int? index) {
+    if (index == null || index < 0 || index >= _queueTracks.length) return;
+    final id = _queueTracks[index].id;
+    if (_loadedTrackId == id) return;
+    _loadedTrackId = id;
+    _trackChanged.add(id);
   }
 
   Future<void> _setSpeed(double speed, {bool temporary = false}) async {
@@ -181,6 +234,28 @@ class AudioPlaybackService {
     }
   }
 
+  Future<bool> skipNext() async {
+    if (!_player.hasNext) return false;
+    await _setSpeed(1);
+    await _player.seekToNext();
+    if (!_player.playing) unawaited(_player.play());
+    return true;
+  }
+
+  Future<bool> skipPrevious() async {
+    if (!_player.hasPrevious) return false;
+    await _setSpeed(1);
+    await _player.seekToPrevious();
+    if (!_player.playing) unawaited(_player.play());
+    return true;
+  }
+
+  Future<void> setShuffle(bool enabled) =>
+      _player.setShuffleModeEnabled(enabled);
+
+  Future<void> setRepeat(bool enabled) =>
+      _player.setLoopMode(enabled ? LoopMode.one : LoopMode.off);
+
   Future<void> seek(double fraction) async {
     final duration = _player.duration;
     if (duration == null || duration.inMilliseconds <= 0) return;
@@ -201,12 +276,16 @@ class AudioPlaybackService {
     await _setSpeed(1);
     await _player.stop();
     _loadedTrackId = null;
+    _queueTracks = const [];
+    _queueIds = const [];
   }
 
   Future<void> stop() async {
     await _setSpeed(1);
     await _player.stop();
     _loadedTrackId = null;
+    _queueTracks = const [];
+    _queueIds = const [];
   }
 
   Future<void> dispose() async {
@@ -219,6 +298,7 @@ class AudioPlaybackService {
     await _playing.close();
     await _errors.close();
     await _completed.close();
+    await _trackChanged.close();
     await _player.dispose();
   }
 }

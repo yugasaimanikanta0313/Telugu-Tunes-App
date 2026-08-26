@@ -5,12 +5,16 @@ A polished Flutter Android client for a private Telugu music circle. It contains
 ## Included in V1
 
 - Material 3 dark interface with phone, tablet, and desktop-width layouts
-- Home discovery shelves for Telugu mixes, albums, and movie worlds
+- Home discovery shelves for charts, moods, a daily automatic mix, albums, and movie worlds
 - Search with mood shortcuts, library, favorites, private playlists, and offline indicators
 - Album/movie detail, animated now-playing view, and persistent mini-player
 - Listen-together room with an invite code, listener state, and shared queue
 - Email/password sign-in for the private circle; passwords are handled only by the backend
-- Real audio playback for uploaded Drive audio, with a responsive mini-player and now-playing screen
+- Gapless queued playback for uploaded private-storage audio, with background controls and real offline downloads
+- Artwork-derived app themes and bounded artwork/audio caching
+- Smart listen-together synchronization with WebSocket status and correction logs
+- Synced Telugu LRC lyrics with LRCLIB search fallback and administrator editing
+- Sleep timer plus administrator metadata backup and non-destructive restore
 - Add music flow with editable Gemini metadata suggestions before device files are uploaded
 - Settings and connection-status screen
 - Mock Tune AI suggestions with a Gemini-ready backend boundary
@@ -60,6 +64,8 @@ Suggested Spring Boot endpoints:
     GET  /api/v1/rooms
     POST /api/v1/imports/audio
     POST /api/v1/imports/reference
+    GET  /api/v1/admin/backup
+    POST /api/v1/admin/backup
     POST /api/v1/assistant
     POST /api/v1/assistant/metadata
 

@@ -19,8 +19,11 @@ import com.telugutunes.api.repository.MemberRepository;
 import com.telugutunes.api.repository.TrackRepository;
 import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -60,15 +63,54 @@ public class CatalogService {
   }
 
   public HomeResponse home() {
-    var allTracks = tracks.findAll();
+    var allTracks = new ArrayList<>(tracks.findAll());
+    allTracks.sort(Comparator.comparing(
+        TrackDocument::createdAt,
+        Comparator.nullsLast(Comparator.reverseOrder())));
     var latest = allTracks.stream().limit(12).map(TrackResponse::from).toList();
-    var collections =
-        List.of(
-            new CollectionResponse(
-                "latest", "Recently added", "New music from your circle", "7C4DFF", "mix", latest),
-            new CollectionResponse(
-                "offline", "Ready for offline", "Download what you want to keep", "00A896", "mix", latest));
+    var charts = allTracks.stream().limit(20).map(TrackResponse::from).toList();
+    var collections = new ArrayList<CollectionResponse>();
+    collections.add(new CollectionResponse(
+        "charts", "Telugu Tunes charts", "Popular picks from your private catalog", "E15184", "playlist", charts));
+    collections.add(new CollectionResponse(
+        "latest", "Recently added", "New music from your circle", "7C4DFF", "mix", latest));
+    addMood(collections, "mood-chill", "Chill Telugu", "Soft songs for a quiet mood", "4F86C6",
+        allTracks, List.of("chill", "melody", "slow", "acoustic", "calm", "lofi"));
+    addMood(collections, "mood-love", "Romantic mood", "Telugu love songs selected automatically", "E15184",
+        allTracks, List.of("love", "romantic", "prema", "melody"));
+    addMood(collections, "mood-energy", "High energy", "Fast songs for drives and workouts", "F59E0B",
+        allTracks, List.of("dance", "mass", "rock", "party", "energetic", "folk"));
+    if (!allTracks.isEmpty()) {
+      var automatic = new ArrayList<>(allTracks);
+      Collections.rotate(automatic, LocalDate.now().getDayOfYear() % automatic.size());
+      collections.add(new CollectionResponse(
+          "automatic-daily", "Your automatic daily mix", "A fresh rotation from your library", "00A896", "mix",
+          automatic.stream().limit(15).map(TrackResponse::from).toList()));
+    }
     return new HomeResponse(collections, albums.findAll().stream().map(this::albumResponse).toList(), latest);
+  }
+
+  private void addMood(
+      List<CollectionResponse> collections,
+      String id,
+      String title,
+      String subtitle,
+      String color,
+      List<TrackDocument> allTracks,
+      List<String> keywords) {
+    var selected = allTracks.stream()
+        .filter(track -> {
+          var searchable = String.join(" ",
+              cleanOrDefault(track.genre(), ""), cleanOrDefault(track.title(), ""),
+              cleanOrDefault(track.album(), "")).toLowerCase(java.util.Locale.ROOT);
+          return keywords.stream().anyMatch(searchable::contains);
+        })
+        .limit(15)
+        .map(TrackResponse::from)
+        .toList();
+    if (!selected.isEmpty()) {
+      collections.add(new CollectionResponse(id, title, subtitle, color, "mix", selected));
+    }
   }
 
   public List<TrackResponse> search(String query) {
