@@ -309,7 +309,8 @@ public class GeminiAssistantService {
         choose(youtubeDetails.genre(), apple.genre()),
         youtubeDetails.year(),
         youtubeDetails.color(),
-        choose(youtubeDetails.thumbnailUrl(), apple.artworkUrl()),
+        // Prefer a square catalog cover. YouTube thumbnails are 16:9 and remain the fallback.
+        choose(apple.artworkUrl(), youtubeDetails.thumbnailUrl()),
         choose(youtubeDetails.sourceUrl(), apple.sourceUrl()),
         sourceName(video, apple),
         false,

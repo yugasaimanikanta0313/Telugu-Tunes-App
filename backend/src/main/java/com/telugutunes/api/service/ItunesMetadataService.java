@@ -48,8 +48,16 @@ public class ItunesMetadataService {
         value(result, "artistName"),
         value(result, "collectionName"),
         value(result, "primaryGenreName"),
-        value(result, "artworkUrl100"),
+        highResolutionArtwork(value(result, "artworkUrl100")),
         value(result, "trackViewUrl"));
+  }
+
+  /** Apple returns a square 100 px URL even when a larger rendition is available. */
+  private String highResolutionArtwork(String value) {
+    if (value == null || value.isBlank()) return "";
+    return value
+        .replaceFirst("\\d+x\\d+bb", "1000x1000bb")
+        .replaceFirst("\\d+x\\d+-\\d+", "1000x1000-999");
   }
 
   private int score(TrackMetadata result, String query) {

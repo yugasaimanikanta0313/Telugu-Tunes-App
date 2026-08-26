@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../domain/models/music_models.dart';
 import '../../state/music_controller.dart';
+import '../shared/widgets.dart';
 
 const _maximumStoredAudioBytes = 5000000;
 
@@ -32,12 +33,12 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
   final _musicDirector = TextEditingController();
   final _genre = TextEditingController();
   final _youtubeUrl = TextEditingController();
+  final _artworkUrl = TextEditingController();
   ImportSource? _selected;
   List<PlatformFile> _audioFiles = [];
   String _color = '7C4DFF';
   String _metadataNotice = '';
   String _metadataSource = '';
-  String _thumbnailUrl = '';
   String _sourceUrl = '';
   bool _submitting = false;
   bool _askingAi = false;
@@ -52,6 +53,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
     _musicDirector.dispose();
     _genre.dispose();
     _youtubeUrl.dispose();
+    _artworkUrl.dispose();
     super.dispose();
   }
 
@@ -119,7 +121,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         _genre.clear();
         _color = '7C4DFF';
         _metadataSource = '';
-        _thumbnailUrl = '';
+        _artworkUrl.clear();
         _sourceUrl = '';
         _metadataNotice =
             'Review the details below. They will be saved with the uploaded audio.';
@@ -151,7 +153,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         _musicDirector.text = result.musicDirector;
         _genre.text = result.genre;
         _color = result.color;
-        _thumbnailUrl = result.thumbnailUrl;
+        _artworkUrl.text = result.thumbnailUrl;
         _sourceUrl = result.sourceUrl;
         _metadataSource = result.source;
         _metadataNotice = result.notice;
@@ -186,7 +188,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
           singers: _singers.text.trim(),
           musicDirector: _musicDirector.text.trim(),
           genre: _genre.text.trim(),
-          artworkUrl: _thumbnailUrl,
+          artworkUrl: _artworkUrl.text.trim(),
           sourceUrl: _sourceUrl,
         );
         receipts.add(receipt);
@@ -386,6 +388,17 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
               prefixIcon: Icon(Icons.smart_display_rounded),
             ),
           ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _artworkUrl,
+            keyboardType: TextInputType.url,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText: 'Artwork URL (optional)',
+              helperText: 'You can replace the suggested cover before upload.',
+              prefixIcon: Icon(Icons.image_outlined),
+            ),
+          ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _askingAi ? null : _askAi,
@@ -396,9 +409,9 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
                 : const Icon(Icons.auto_awesome_rounded),
             label: Text(_askingAi
                 ? 'Finding details…'
-                : 'Find details from YouTube / Gemini'),
+                : 'Find details and square cover'),
           ),
-          if (_thumbnailUrl.isNotEmpty) ...[
+          if (_artworkUrl.text.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
             _metadataPreview(context),
           ],
@@ -502,24 +515,18 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         ),
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.network(
-                _thumbnailUrl,
-                width: 72,
-                height: 54,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox(
-                  width: 72,
-                  height: 54,
-                  child: Icon(Icons.broken_image_rounded),
-                ),
-              ),
+            Artwork(
+              color: _color,
+              label: _album.text.trim().isEmpty
+                  ? _title.text.trim()
+                  : _album.text.trim(),
+              imageUrl: _artworkUrl.text.trim(),
+              size: 72,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'YouTube thumbnail will be linked to this private track. It is not copied into Drive.',
+                'Square catalog artwork is preferred. A YouTube fallback is shown uncropped. The image is linked, not copied into storage.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),

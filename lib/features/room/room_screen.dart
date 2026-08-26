@@ -299,6 +299,7 @@ class _ActiveRoom extends StatelessWidget {
 
   Future<void> _leaveRoom(BuildContext context) async {
     final action = _isHost ? 'Close room' : 'Leave room';
+    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -318,16 +319,12 @@ class _ActiveRoom extends StatelessWidget {
     );
     if (confirmed != true || !context.mounted) return;
     try {
-      await context.read<MusicController>().leaveRoom();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(_isHost ? 'Room closed.' : 'You left the room.')));
-      }
+      await controller.leaveRoom();
+      messenger.showSnackBar(SnackBar(
+          content: Text(_isHost ? 'Room closed.' : 'You left the room.')));
     } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(error.toString().replaceFirst('Bad state: ', ''))));
-      }
+      messenger.showSnackBar(SnackBar(
+          content: Text(error.toString().replaceFirst('Bad state: ', ''))));
     }
   }
 

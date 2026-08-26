@@ -75,6 +75,7 @@ class MusicController extends ChangeNotifier {
   Timer? _publicRoomsPolling;
   bool _pollingRoom = false;
   bool _publishingRoomPlayback = false;
+  bool _suppressRoomStatusNotification = false;
   ListeningRoom? _pendingRoomSync;
   Future<void>? _roomSyncWorker;
   Timer? _sleepTimer;
@@ -431,10 +432,23 @@ class MusicController extends ChangeNotifier {
     final activeRoom = room;
     if (activeRoom == null) return;
     await _repository.leaveRoom(activeRoom.id);
+    _pendingRoomSync = null;
     room = null;
-    _configureRoomPolling();
+    _suppressRoomStatusNotification = true;
+    try {
+      _configureRoomPolling();
+    } finally {
+      _suppressRoomStatusNotification = false;
+    }
     await _stopSharedRoomPlayback();
     await _refreshPublicRooms();
+    _addSyncLog(
+      activeRoom.host == memberId
+          ? 'Room closed and local playback stopped'
+          : 'Left room and local playback stopped',
+      roomDriftMs,
+    );
+    roomDriftMs = 0;
     notifyListeners();
   }
 
@@ -489,9 +503,17 @@ class MusicController extends ChangeNotifier {
     try {
       final refreshed = await _repository.getRoom();
       if (refreshed == null || refreshed.id != previous.id) {
+        _pendingRoomSync = null;
         room = null;
-        _configureRoomPolling();
+        _suppressRoomStatusNotification = true;
+        try {
+          _configureRoomPolling();
+        } finally {
+          _suppressRoomStatusNotification = false;
+        }
         await _stopSharedRoomPlayback();
+        _addSyncLog('The host closed the room; playback stopped', roomDriftMs);
+        roomDriftMs = 0;
         notifyListeners();
         return;
       }
@@ -613,6 +635,7 @@ class MusicController extends ChangeNotifier {
   }
 
   Future<void> _applyRoomSynchronization(ListeningRoom activeRoom) async {
+    if (room?.id != activeRoom.id) return;
     final track = activeRoom.track;
     if (track == null) return;
     if (current?.id != track.id) {
@@ -634,10 +657,12 @@ class MusicController extends ChangeNotifier {
     try {
       final correction =
           await _audio.synchronize(track, target, activeRoom.roomPlaying);
+      if (room?.id != activeRoom.id) return;
       roomDriftMs = correction.driftMs;
       _recordCorrection(correction);
       playing = activeRoom.roomPlaying;
     } catch (error) {
+      if (room?.id != activeRoom.id) return;
       playerError = error.toString().replaceFirst('Bad state: ', '');
       playing = false;
       _addSyncLog('Synchronization error: $playerError', roomDriftMs);
@@ -663,7 +688,7 @@ class MusicController extends ChangeNotifier {
       RoomConnectionStatus.disconnected => 'Room connection closed',
     };
     _addSyncLog(label, roomDriftMs);
-    notifyListeners();
+    if (!_suppressRoomStatusNotification) notifyListeners();
   }
 
   void _recordCorrection(SyncCorrection correction) {

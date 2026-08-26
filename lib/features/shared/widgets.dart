@@ -88,10 +88,28 @@ class Artwork extends StatelessWidget {
       borderRadius: BorderRadius.circular(size * .18),
       child: CachedNetworkImage(
         imageUrl: imageUrl,
-        fit: BoxFit.cover,
         memCacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
-        memCacheHeight: (size * MediaQuery.devicePixelRatioOf(context)).round(),
         fadeInDuration: const Duration(milliseconds: 180),
+        imageBuilder: (_, imageProvider) => Stack(
+          fit: StackFit.expand,
+          children: [
+            Image(
+              image: imageProvider,
+              fit: BoxFit.cover,
+              color: Colors.black.withValues(alpha: .48),
+              colorBlendMode: BlendMode.darken,
+              filterQuality: FilterQuality.medium,
+            ),
+            Padding(
+              padding: EdgeInsets.all(size >= 120 ? 4 : 2),
+              child: Image(
+                image: imageProvider,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
+            ),
+          ],
+        ),
         placeholder: (_, __) => placeholder,
         errorWidget: (_, __, ___) => placeholder,
       ),
@@ -558,6 +576,7 @@ Future<void> _confirmDeleteTrack(BuildContext context, Track track) async {
 }
 
 Future<void> showEditTrackDialog(BuildContext context, Track track) async {
+  final music = context.read<MusicController>();
   final title = TextEditingController(text: track.title);
   final artist = TextEditingController(text: track.artist);
   final album = TextEditingController(text: track.album);
@@ -624,28 +643,58 @@ Future<void> showEditTrackDialog(BuildContext context, Track track) async {
         ),
       ),
       actions: [
+        TextButton.icon(
+          onPressed: () async {
+            try {
+              final query = [title.text, artist.text, album.text]
+                  .where((value) => value.trim().isNotEmpty)
+                  .join(' ');
+              final result = await music.suggestMetadata(query);
+              if (!dialogContext.mounted) return;
+              if (result.thumbnailUrl.isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('No matching cover found.')),
+                );
+                return;
+              }
+              artworkUrl.text = result.thumbnailUrl;
+              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                SnackBar(content: Text('Cover found from ${result.source}.')),
+              );
+            } catch (error) {
+              if (dialogContext.mounted) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(
+                  content:
+                      Text(error.toString().replaceFirst('Bad state: ', '')),
+                ));
+              }
+            }
+          },
+          icon: const Icon(Icons.image_search_rounded),
+          label: const Text('Find cover'),
+        ),
         TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel')),
         FilledButton(
           onPressed: () async {
             try {
-              await context.read<MusicController>().updateTrack(Track(
-                    id: track.id,
-                    title: title.text.trim(),
-                    artist: artist.text.trim(),
-                    album: album.text.trim(),
-                    albumId: track.albumId,
-                    duration: track.duration,
-                    color: color.text.trim(),
-                    singers: singers.text.trim(),
-                    musicDirector: director.text.trim(),
-                    genre: genre.text.trim(),
-                    artworkUrl: artworkUrl.text.trim(),
-                    sourceUrl: sourceUrl.text.trim(),
-                    downloaded: track.downloaded,
-                    isExplicit: track.isExplicit,
-                  ));
+              await music.updateTrack(Track(
+                id: track.id,
+                title: title.text.trim(),
+                artist: artist.text.trim(),
+                album: album.text.trim(),
+                albumId: track.albumId,
+                duration: track.duration,
+                color: color.text.trim(),
+                singers: singers.text.trim(),
+                musicDirector: director.text.trim(),
+                genre: genre.text.trim(),
+                artworkUrl: artworkUrl.text.trim(),
+                sourceUrl: sourceUrl.text.trim(),
+                downloaded: track.downloaded,
+                isExplicit: track.isExplicit,
+              ));
               if (!dialogContext.mounted) return;
               Navigator.pop(dialogContext);
               ScaffoldMessenger.of(context)
