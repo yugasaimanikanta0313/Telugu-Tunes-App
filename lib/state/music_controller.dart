@@ -920,6 +920,14 @@ class MusicController extends ChangeNotifier {
     return playlist;
   }
 
+  Future<void> updatePlaylist(Playlist playlist) async {
+    final updated = await _repository.updatePlaylist(playlist);
+    _playlists = _playlists
+        .map((item) => item.id == updated.id ? updated : item)
+        .toList();
+    notifyListeners();
+  }
+
   Future<void> addToPlaylist(String playlistId, Track track) async {
     final updated = await _repository.addTrackToPlaylist(playlistId, track);
     _playlists = _playlists

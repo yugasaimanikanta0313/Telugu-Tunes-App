@@ -24,6 +24,7 @@ abstract class MusicApiService {
   Future<ApiSession> login({required String email, required String password});
   Future<MemberProfile> getProfile();
   Future<Playlist> createPlaylist(String name);
+  Future<Playlist> updatePlaylist(Playlist playlist);
   Future<Playlist> addTrackToPlaylist(String playlistId, String trackId);
   Future<Album> updateAlbum(Album album);
   Future<void> deleteAlbum(String albumId);
@@ -212,7 +213,18 @@ class SpringBootMusicApiService implements MusicApiService {
         'name': name,
         'description': 'Created in Telugu Tunes',
         'color': 'F59E0B',
+        'artworkUrl': '',
       }));
+
+  @override
+  Future<Playlist> updatePlaylist(Playlist playlist) async => _playlist(
+        await _putMap('/playlists/${playlist.id}', {
+          'name': playlist.name,
+          'description': playlist.description,
+          'color': playlist.color,
+          'artworkUrl': playlist.artworkUrl,
+        }),
+      );
 
   @override
   Future<Playlist> addTrackToPlaylist(
@@ -653,6 +665,7 @@ class SpringBootMusicApiService implements MusicApiService {
         name: json['name'] as String,
         description: json['description'] as String,
         color: json['color'] as String,
+        artworkUrl: json['artworkUrl'] as String? ?? '',
         tracks: _list(json['tracks']).map(_track).toList(),
       );
 

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -131,23 +132,66 @@ class _SearchScreenState extends State<SearchScreen> {
                         _input.text = album.title;
                         _search(album.title);
                       },
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                  album.isMovie
-                                      ? Icons.local_movies_rounded
-                                      : Icons.album_rounded,
-                                  color: Colors.white.withOpacity(.88)),
-                              const Spacer(),
-                              Text(album.title,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w900)),
-                              Text(album.isMovie ? 'Movie world' : 'Album',
-                                  style: Theme.of(context).textTheme.bodySmall),
-                            ]),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (album.artworkUrl.isNotEmpty)
+                              CachedNetworkImage(
+                                imageUrl: album.artworkUrl,
+                                fit: BoxFit.cover,
+                              ),
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: album.artworkUrl.isEmpty
+                                      ? [
+                                          Colors.transparent,
+                                          Colors.black.withValues(alpha: .12),
+                                        ]
+                                      : [
+                                          Colors.black.withValues(alpha: .08),
+                                          Colors.black.withValues(alpha: .82),
+                                        ],
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (album.artworkUrl.isEmpty)
+                                    Icon(
+                                      album.isMovie
+                                          ? Icons.local_movies_rounded
+                                          : Icons.album_rounded,
+                                      color:
+                                          Colors.white.withValues(alpha: .88),
+                                    ),
+                                  const Spacer(),
+                                  Text(
+                                    album.title,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  Text(
+                                    album.isMovie ? 'Movie world' : 'Album',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(color: Colors.white70),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

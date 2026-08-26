@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -44,5 +45,13 @@ public class PlaylistsController {
       @PathVariable String playlistId,
       @PathVariable String trackId) {
     return playlists.addTrack(memberId, playlistId, trackId);
+  }
+
+  @PutMapping("/{playlistId}")
+  public PlaylistResponse update(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
+      @PathVariable String playlistId,
+      @Valid @RequestBody CreatePlaylistRequest request) {
+    return playlists.update(memberId, playlistId, request);
   }
 }

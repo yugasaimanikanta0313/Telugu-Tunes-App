@@ -7,5 +7,6 @@ public record PlaylistResponse(
     String name,
     String description,
     String color,
+    String artworkUrl,
     List<TrackResponse> tracks,
     List<String> sharedWithMemberIds) {}

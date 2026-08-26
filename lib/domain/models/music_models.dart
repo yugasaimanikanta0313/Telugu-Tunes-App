@@ -143,6 +143,7 @@ class Playlist {
     required this.description,
     required this.color,
     required this.tracks,
+    this.artworkUrl = '',
     this.isPinned = false,
   });
 
@@ -150,6 +151,7 @@ class Playlist {
   final String name;
   final String description;
   final String color;
+  final String artworkUrl;
   final List<Track> tracks;
   final bool isPinned;
 
@@ -158,6 +160,7 @@ class Playlist {
         name: name,
         description: description,
         color: color,
+        artworkUrl: artworkUrl,
         tracks: tracks ?? this.tracks,
         isPinned: isPinned,
       );

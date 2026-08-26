@@ -12,6 +12,7 @@ public record PlaylistDocument(
     String name,
     String description,
     String artworkColor,
+    String artworkUrl,
     List<String> trackIds,
     List<String> sharedWithMemberIds,
     Instant createdAt,

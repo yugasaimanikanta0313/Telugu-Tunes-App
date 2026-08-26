@@ -6,4 +6,5 @@ import jakarta.validation.constraints.Size;
 public record CreatePlaylistRequest(
     @NotBlank @Size(max = 100) String name,
     @Size(max = 300) String description,
-    @Size(max = 7) String color) {}
+    @Size(max = 7) String color,
+    @Size(max = 2000) String artworkUrl) {}

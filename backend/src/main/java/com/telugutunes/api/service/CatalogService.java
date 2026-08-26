@@ -174,7 +174,8 @@ public class CatalogService {
       playlists.save(
           new com.telugutunes.api.domain.PlaylistDocument(
               playlist.id(), playlist.ownerMemberId(), playlist.name(), playlist.description(),
-              playlist.artworkColor(), ids, playlist.sharedWithMemberIds(), playlist.createdAt(), Instant.now()));
+              playlist.artworkColor(), playlist.artworkUrl(), ids, playlist.sharedWithMemberIds(),
+              playlist.createdAt(), Instant.now()));
     }
     for (var room : rooms.findAll()) {
       var queue = new ArrayList<>(room.queueTrackIds());
