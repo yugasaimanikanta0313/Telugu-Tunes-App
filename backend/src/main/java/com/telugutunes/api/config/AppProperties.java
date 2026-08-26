@@ -149,6 +149,7 @@ public class AppProperties {
   public static class R2 {
     private boolean enabled;
     private String endpoint = "";
+    private String region = "auto";
     private String accessKeyId = "";
     private String secretAccessKey = "";
     private String bucket = "telugu-tunes-audio";
@@ -158,6 +159,8 @@ public class AppProperties {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public String getEndpoint() { return endpoint; }
     public void setEndpoint(String endpoint) { this.endpoint = endpoint; }
+    public String getRegion() { return region; }
+    public void setRegion(String region) { this.region = region; }
     public String getAccessKeyId() { return accessKeyId; }
     public void setAccessKeyId(String accessKeyId) { this.accessKeyId = accessKeyId; }
     public String getSecretAccessKey() { return secretAccessKey; }

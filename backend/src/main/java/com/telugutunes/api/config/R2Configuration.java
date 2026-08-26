@@ -17,19 +17,25 @@ public class R2Configuration {
   S3Client r2Client(AppProperties properties) {
     var r2 = properties.getStorage().getR2();
     if (r2.getEndpoint().isBlank()
-        || r2.getAccessKeyId().isBlank()
+        && "auto".equalsIgnoreCase(r2.getRegion())) {
+      throw new IllegalStateException("S3 storage needs AWS_S3_REGION or R2_ENDPOINT.");
+    }
+    if (r2.getAccessKeyId().isBlank()
         || r2.getSecretAccessKey().isBlank()
         || r2.getBucket().isBlank()) {
       throw new IllegalStateException(
-          "R2 is enabled but its endpoint, bucket, or credentials are missing.");
+          "S3 storage is enabled but its bucket or credentials are missing.");
     }
-    return S3Client.builder()
-        .endpointOverride(URI.create(r2.getEndpoint()))
-        .region(Region.of("auto"))
+    var builder = S3Client.builder()
+        .region(Region.of(r2.getRegion()))
         .credentialsProvider(
             StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(r2.getAccessKeyId(), r2.getSecretAccessKey())))
-        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
-        .build();
+        .serviceConfiguration(
+            S3Configuration.builder().pathStyleAccessEnabled(!r2.getEndpoint().isBlank()).build());
+    if (!r2.getEndpoint().isBlank()) {
+      builder.endpointOverride(URI.create(r2.getEndpoint()));
+    }
+    return builder.build();
   }
 }

@@ -25,6 +25,9 @@ public class ResilientStorageService {
   public ResilientStorageService(List<MediaStorageService> providers, AppProperties properties) {
     this.providers = new LinkedHashMap<>();
     providers.forEach(provider -> this.providers.put(provider.providerName(), provider));
+    if (this.providers.containsKey("s3")) {
+      this.providers.put("r2", this.providers.get("s3"));
+    }
     this.properties = properties.getStorage();
   }
 

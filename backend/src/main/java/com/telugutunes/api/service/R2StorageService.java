@@ -31,7 +31,7 @@ public class R2StorageService implements MediaStorageService {
 
   @Override
   public String providerName() {
-    return "r2";
+    return "s3";
   }
 
   @Override
@@ -113,7 +113,7 @@ public class R2StorageService implements MediaStorageService {
   }
 
   private IOException storageFailure(String action, S3Exception exception) {
-    return new IOException("R2 could not " + action + " this audio file.", exception);
+    return new IOException("S3 storage could not " + action + " this audio file.", exception);
   }
 
   private String safeFileName(String fileName) {
