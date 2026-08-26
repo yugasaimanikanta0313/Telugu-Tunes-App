@@ -6,6 +6,7 @@ import com.telugutunes.api.api.dto.JoinRoomRequest;
 import com.telugutunes.api.api.dto.UpdateRoomPlaybackRequest;
 import com.telugutunes.api.service.RoomService;
 import com.telugutunes.api.config.AuthenticationFilter;
+import com.telugutunes.api.realtime.RoomWebSocketHandler;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,9 +24,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/rooms")
 public class RoomsController {
   private final RoomService rooms;
+  private final RoomWebSocketHandler realtime;
 
-  public RoomsController(RoomService rooms) {
+  public RoomsController(RoomService rooms, RoomWebSocketHandler realtime) {
     this.rooms = rooms;
+    this.realtime = realtime;
   }
 
   @GetMapping
@@ -48,21 +51,27 @@ public class RoomsController {
   public RoomResponse create(
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
       @Valid @RequestBody CreateRoomRequest request) {
-    return rooms.create(memberId, request);
+    var room = rooms.create(memberId, request);
+    realtime.broadcastRoomChanged(room.id());
+    return room;
   }
 
   @PostMapping("/join")
   public RoomResponse join(
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
       @Valid @RequestBody JoinRoomRequest request) {
-    return rooms.join(memberId, request.inviteCode());
+    var room = rooms.join(memberId, request.inviteCode());
+    realtime.broadcastRoomChanged(room.id());
+    return room;
   }
 
   @PostMapping("/public/{roomId}/join")
   public RoomResponse joinPublic(
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
       @PathVariable String roomId) {
-    return rooms.joinPublic(memberId, roomId);
+    var room = rooms.joinPublic(memberId, roomId);
+    realtime.broadcastRoomChanged(room.id());
+    return room;
   }
 
   @PostMapping("/{roomId}/leave")
@@ -71,6 +80,7 @@ public class RoomsController {
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
       @PathVariable String roomId) {
     rooms.leave(memberId, roomId);
+    realtime.broadcastRoomChanged(roomId);
   }
 
   @PostMapping("/{roomId}/track/{trackId}")
@@ -78,7 +88,9 @@ public class RoomsController {
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
       @PathVariable String roomId,
       @PathVariable String trackId) {
-    return rooms.setCurrentTrack(memberId, roomId, trackId);
+    var room = rooms.setCurrentTrack(memberId, roomId, trackId);
+    realtime.broadcastRoomChanged(room.id());
+    return room;
   }
 
   /** Receives the room host's player clock. Only the host can publish it. */
@@ -87,7 +99,9 @@ public class RoomsController {
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
       @PathVariable String roomId,
       @Valid @RequestBody UpdateRoomPlaybackRequest request) {
-    return rooms.updatePlayback(memberId, roomId, request);
+    var room = rooms.updatePlayback(memberId, roomId, request);
+    realtime.broadcastPlayback(room);
+    return room;
   }
 
   @PostMapping("/{roomId}/queue/{trackId}")
@@ -95,7 +109,9 @@ public class RoomsController {
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
       @PathVariable String roomId,
       @PathVariable String trackId) {
-    return rooms.addToQueue(memberId, roomId, trackId);
+    var room = rooms.addToQueue(memberId, roomId, trackId);
+    realtime.broadcastRoomChanged(room.id());
+    return room;
   }
 
   /** Advances the shared first-in, first-out queue after the host finishes a track. */
@@ -104,6 +120,8 @@ public class RoomsController {
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
       @PathVariable String roomId,
       @PathVariable String trackId) {
-    return rooms.advanceQueue(memberId, roomId, trackId);
+    var room = rooms.advanceQueue(memberId, roomId, trackId);
+    realtime.broadcastRoomChanged(room.id());
+    return room;
   }
 }

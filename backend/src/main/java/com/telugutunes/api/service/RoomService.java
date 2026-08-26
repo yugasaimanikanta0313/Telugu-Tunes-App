@@ -27,6 +27,15 @@ public class RoomService {
     return rooms.findByMemberIdsContainsAndActiveTrue(memberId).stream().map(this::response).toList();
   }
 
+  /** Validates a WebSocket subscription once when a member connects to a room. */
+  public RealtimeAccess realtimeAccess(String memberId, String roomId) {
+    var room = rooms.findById(roomId).orElseThrow(() -> new NotFoundException("Room not found."));
+    if (!room.active() || !room.memberIds().contains(memberId)) {
+      throw new IllegalArgumentException("Join this room before starting live synchronization.");
+    }
+    return new RealtimeAccess(room.hostMemberId().equals(memberId));
+  }
+
   /** Public rooms are visible to every signed-in Telugu Tunes member. */
   public List<RoomResponse> listPublic() {
     return rooms.findByPublicRoomTrueAndActiveTrue().stream().map(this::response).toList();
@@ -217,4 +226,6 @@ public class RoomService {
         room.memberIds().size(), current, catalog.tracksByIds(room.queueTrackIds()),
         effectivePosition(room), isPlaying(room), room.active());
   }
+
+  public record RealtimeAccess(boolean host) {}
 }

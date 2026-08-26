@@ -60,9 +60,15 @@ class AudioPlaybackService {
     if (!isAvailable) return;
     final safeTarget = target.isNegative ? Duration.zero : target;
     if (_loadedTrackId != trackId) {
+      final loading = Stopwatch()..start();
       await _load(trackId);
-      await _player.seek(safeTarget);
-    } else if ((_player.position - safeTarget).inMilliseconds.abs() > 350) {
+      loading.stop();
+      // The host continues playing while a guest buffers a newly selected track.
+      // Include that elapsed time so the guest does not begin several seconds behind.
+      final caughtUpTarget =
+          shouldPlay ? safeTarget + loading.elapsed : safeTarget;
+      await _player.seek(caughtUpTarget);
+    } else if ((_player.position - safeTarget).inMilliseconds.abs() > 200) {
       await _player.seek(safeTarget);
     }
     if (shouldPlay && !_player.playing) {
