@@ -45,7 +45,8 @@ public class AuthController {
     var cookie =
         ResponseCookie.from("telugu_tunes_session", token)
             .httpOnly(true)
-            .sameSite("Lax")
+            .secure(true)
+            .sameSite("None")
             .path("/")
             .maxAge(Duration.ofDays(30))
             .build();
