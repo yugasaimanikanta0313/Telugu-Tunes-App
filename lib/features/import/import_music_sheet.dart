@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -42,9 +44,14 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
   String _sourceUrl = '';
   bool _submitting = false;
   bool _askingAi = false;
+  Timer? _uploadStatusTimer;
+  int _uploadElapsedSeconds = 0;
+  int _uploadFileIndex = 0;
+  String _uploadStage = '';
 
   @override
   void dispose() {
+    _uploadStatusTimer?.cancel();
     _url.dispose();
     _title.dispose();
     _artist.dispose();
@@ -176,13 +183,20 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
       _showMessage('Enter a title before uploading.');
       return;
     }
-    setState(() => _submitting = true);
+    _startUploadStatus();
     try {
       final controller = context.read<MusicController>();
       ImportReceipt? receipt;
       final receipts = <ImportReceipt>[];
       for (var index = 0; index < _audioFiles.length; index++) {
         final file = _audioFiles[index];
+        if (mounted) {
+          setState(() {
+            _uploadFileIndex = index;
+            _uploadElapsedSeconds = 0;
+            _uploadStage = 'Uploading ${file.name} to the server…';
+          });
+        }
         receipt = await controller.uploadAudio(
           file.name,
           file.bytes!,
@@ -210,7 +224,42 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
     } catch (error) {
       _showError(error);
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      _stopUploadStatus();
+    }
+  }
+
+  void _startUploadStatus() {
+    _uploadStatusTimer?.cancel();
+    setState(() {
+      _submitting = true;
+      _uploadElapsedSeconds = 0;
+      _uploadFileIndex = 0;
+      _uploadStage = 'Uploading ${_audioFiles.first.name} to the server…';
+    });
+    _uploadStatusTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !_submitting) return;
+      setState(() {
+        _uploadElapsedSeconds++;
+        final file = _audioFiles[_uploadFileIndex];
+        final bytes = file.bytes?.length ?? file.size;
+        if (_uploadElapsedSeconds >= 12 && bytes > _maximumStoredAudioBytes) {
+          _uploadStage = 'Compressing to M4A below 5 MB, then saving to OCI…';
+        } else if (_uploadElapsedSeconds >= 12) {
+          _uploadStage = 'Saving the song to OCI storage…';
+        }
+      });
+    });
+  }
+
+  void _stopUploadStatus() {
+    _uploadStatusTimer?.cancel();
+    _uploadStatusTimer = null;
+    if (mounted) {
+      setState(() {
+        _submitting = false;
+        _uploadElapsedSeconds = 0;
+        _uploadStage = '';
+      });
     }
   }
 
@@ -446,9 +495,21 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.cloud_upload_rounded),
               label: Text(
-                  _submitting ? 'Uploading…' : 'Upload to private library'),
+                  _submitting ? _uploadStage : 'Upload to private library'),
             ),
           ),
+          if (_submitting) ...[
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              semanticsLabel: _uploadStage,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${_audioFiles.length > 1 ? 'File ${_uploadFileIndex + 1} of ${_audioFiles.length} • ' : ''}${_uploadElapsedSeconds}s elapsed. Keep this window open.',
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+          ],
           TextButton(
             onPressed:
                 _submitting ? null : () => setState(() => _audioFiles = []),
