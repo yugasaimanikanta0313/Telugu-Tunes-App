@@ -36,14 +36,17 @@ app:
       oauth-redirect-uri: ${GOOGLE_OAUTH_REDIRECT_URI:http://localhost:8080/api/v1/storage/google-drive/callback}
       folder-id: ${GOOGLE_DRIVE_FOLDER_ID:}
     r2:
-      enabled: ${AWS_S3_ENABLED:${R2_ENABLED:false}}
-      endpoint: ${R2_ENDPOINT:}
-      region: ${AWS_S3_REGION:auto}
-      access-key-id: ${AWS_ACCESS_KEY_ID:${R2_ACCESS_KEY_ID:}}
-      secret-access-key: ${AWS_SECRET_ACCESS_KEY:${R2_SECRET_ACCESS_KEY:}}
-      bucket: ${AWS_S3_BUCKET:${R2_BUCKET:telugu-tunes-audio}}
-      # Keep a two-gigabyte buffer below R2's current 10 GB free allowance.
-      max-bytes: ${R2_MAX_BYTES:8000000000}
+      # S3-compatible storage. OCI values take precedence; the AWS/R2 names remain
+      # as fallbacks so existing deployments can migrate without a flag day.
+      enabled: ${OCI_S3_ENABLED:${AWS_S3_ENABLED:${R2_ENABLED:false}}}
+      endpoint: ${OCI_S3_ENDPOINT:${R2_ENDPOINT:}}
+      namespace: ${OCI_NAMESPACE:}
+      region: ${OCI_REGION:${AWS_S3_REGION:auto}}
+      access-key-id: ${OCI_ACCESS_KEY_ID:${AWS_ACCESS_KEY_ID:${R2_ACCESS_KEY_ID:}}}
+      secret-access-key: ${OCI_SECRET_ACCESS_KEY:${AWS_SECRET_ACCESS_KEY:${R2_SECRET_ACCESS_KEY:}}}
+      bucket: ${OCI_BUCKET:${AWS_S3_BUCKET:${R2_BUCKET:telugu-tunes-audio}}}
+      # Leave a safety margin below the selected free storage allowance.
+      max-bytes: ${OCI_MAX_BYTES:${R2_MAX_BYTES:8000000000}}
   gemini:
     api-key: ${GEMINI_API_KEY:}
     model: ${GEMINI_MODEL:gemini-3.7-flash}

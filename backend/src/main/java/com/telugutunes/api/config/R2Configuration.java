@@ -16,9 +16,17 @@ public class R2Configuration {
   @ConditionalOnProperty(prefix = "app.storage.r2", name = "enabled", havingValue = "true")
   S3Client r2Client(AppProperties properties) {
     var r2 = properties.getStorage().getR2();
-    if (r2.getEndpoint().isBlank()
-        && "auto".equalsIgnoreCase(r2.getRegion())) {
-      throw new IllegalStateException("S3 storage needs AWS_S3_REGION or R2_ENDPOINT.");
+    var endpoint = r2.getEndpoint();
+    if (endpoint.isBlank() && !r2.getNamespace().isBlank()) {
+      if (r2.getRegion().isBlank() || "auto".equalsIgnoreCase(r2.getRegion())) {
+        throw new IllegalStateException("OCI storage needs OCI_REGION.");
+      }
+      endpoint = "https://" + r2.getNamespace()
+          + ".compat.objectstorage." + r2.getRegion() + ".oraclecloud.com";
+    }
+    if (endpoint.isBlank() && "auto".equalsIgnoreCase(r2.getRegion())) {
+      throw new IllegalStateException(
+          "S3-compatible storage needs OCI_NAMESPACE and OCI_REGION, or an explicit endpoint.");
     }
     if (r2.getAccessKeyId().isBlank()
         || r2.getSecretAccessKey().isBlank()
@@ -32,9 +40,9 @@ public class R2Configuration {
             StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(r2.getAccessKeyId(), r2.getSecretAccessKey())))
         .serviceConfiguration(
-            S3Configuration.builder().pathStyleAccessEnabled(!r2.getEndpoint().isBlank()).build());
-    if (!r2.getEndpoint().isBlank()) {
-      builder.endpointOverride(URI.create(r2.getEndpoint()));
+            S3Configuration.builder().pathStyleAccessEnabled(!endpoint.isBlank()).build());
+    if (!endpoint.isBlank()) {
+      builder.endpointOverride(URI.create(endpoint));
     }
     return builder.build();
   }

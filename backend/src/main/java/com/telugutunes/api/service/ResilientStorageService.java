@@ -29,8 +29,12 @@ public class ResilientStorageService {
       AudioCompressionService compression) {
     this.providers = new LinkedHashMap<>();
     providers.forEach(provider -> this.providers.put(provider.providerName(), provider));
-    if (this.providers.containsKey("s3")) {
-      this.providers.put("r2", this.providers.get("s3"));
+    var compatibleStorage = this.providers.get("oci");
+    if (compatibleStorage == null) compatibleStorage = this.providers.get("s3");
+    if (compatibleStorage != null) {
+      this.providers.put("oci", compatibleStorage);
+      this.providers.put("s3", compatibleStorage);
+      this.providers.put("r2", compatibleStorage);
     }
     this.properties = properties.getStorage();
     this.compression = compression;

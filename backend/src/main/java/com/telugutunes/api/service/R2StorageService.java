@@ -31,7 +31,7 @@ public class R2StorageService implements MediaStorageService {
 
   @Override
   public String providerName() {
-    return "s3";
+    return properties.getNamespace().isBlank() ? "s3" : "oci";
   }
 
   @Override
@@ -108,7 +108,8 @@ public class R2StorageService implements MediaStorageService {
       throw storageFailure("check capacity", exception);
     }
     if (usedBytes + incomingBytes > properties.getMaxBytes()) {
-      throw new IOException("The private R2 music library has reached its configured safety limit.");
+      throw new IOException(
+          "The private music library has reached its configured storage safety limit.");
     }
   }
 

@@ -149,6 +149,7 @@ public class AppProperties {
   public static class R2 {
     private boolean enabled;
     private String endpoint = "";
+    private String namespace = "";
     private String region = "auto";
     private String accessKeyId = "";
     private String secretAccessKey = "";
@@ -159,6 +160,8 @@ public class AppProperties {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public String getEndpoint() { return endpoint; }
     public void setEndpoint(String endpoint) { this.endpoint = endpoint; }
+    public String getNamespace() { return namespace; }
+    public void setNamespace(String namespace) { this.namespace = namespace; }
     public String getRegion() { return region; }
     public void setRegion(String region) { this.region = region; }
     public String getAccessKeyId() { return accessKeyId; }

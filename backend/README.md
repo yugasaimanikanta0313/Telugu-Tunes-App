@@ -6,7 +6,8 @@ Spring Boot API for a private, scalable music circle. Member count is not hard-c
 
 - MongoDB documents and repositories for members, tracks, albums, playlists, rooms, and imports
 - REST endpoints matching the Flutter client
-- Multipart audio upload pipeline with Cloudflare R2 and optional Google Drive replication/failover
+- Multipart audio upload pipeline with OCI Object Storage (S3-compatible), legacy R2/AWS
+  compatibility, and optional Google Drive replication/failover
 - Server-side audio proxy endpoint so storage credentials never reach the APK
 - Gemini Tune AI endpoint using a server environment variable
 - YouTube Data API song lookup (title, channel, year, thumbnail) plus editable Gemini credit enrichment
@@ -33,7 +34,33 @@ Spring Boot API for a private, scalable music circle. Member count is not hard-c
 
 7. The configured operator email is an administrator by default. Set `APP_ADMIN_EMAILS` to a comma-separated list only if you need to change the administrators for another deployment. After changing an administrator role, sign out and back in to refresh the Flutter app's account badge and settings.
 
-The backend supports Cloudflare R2 plus both a shared-folder service account and personal Drive OAuth. It can write each upload to a primary and backup provider, then automatically try the other replica during playback. Existing database rows with a plain Drive file ID remain compatible.
+The backend supports OCI Object Storage through its S3-compatible API, plus legacy
+Cloudflare R2/AWS environment variables and both Drive authentication modes. It can write each
+upload to a primary and backup provider, then automatically try the other replica during playback.
+Existing database rows with a plain Drive file ID remain compatible.
+
+## Oracle Object Storage
+
+Use a private Standard-tier bucket and an OCI Customer Secret Key. Never commit or paste the
+key. The endpoint is derived automatically from `OCI_NAMESPACE` and `OCI_REGION` and uses OCI's
+required path-style S3 access.
+
+Set these environment variables on the backend host:
+
+    APP_STORAGE_PRIMARY=oci
+    APP_STORAGE_BACKUP=disabled
+    OCI_S3_ENABLED=true
+    OCI_NAMESPACE=YOUR_TENANCY_NAMESPACE
+    OCI_REGION=ap-hyderabad-1
+    OCI_BUCKET=telugu-tunes-media
+    OCI_ACCESS_KEY_ID=YOUR_NEW_CUSTOMER_ACCESS_KEY
+    OCI_SECRET_ACCESS_KEY=YOUR_NEW_CUSTOMER_SECRET_KEY
+    OCI_MAX_BYTES=8000000000
+
+Before changing a running deployment, copy every existing AWS object to OCI while preserving its
+full key (for example `audio/uuid-song.mp3`). MongoDB stores those keys, so changing the endpoint
+without copying the objects makes existing songs unavailable. New uploads are recorded with the
+`oci` provider label; older `s3` and `r2` locator labels remain readable after a same-key migration.
 
 ## Deploy to Render with Cloudflare R2
 
