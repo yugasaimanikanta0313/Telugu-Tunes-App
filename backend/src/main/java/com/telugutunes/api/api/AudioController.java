@@ -2,6 +2,7 @@ package com.telugutunes.api.api;
 
 import com.telugutunes.api.exception.NotFoundException;
 import com.telugutunes.api.service.CatalogService;
+import com.telugutunes.api.service.AudioPlaybackTicketService;
 import com.telugutunes.api.service.ResilientStorageService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -9,6 +10,7 @@ import java.io.IOException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -17,17 +19,40 @@ import org.springframework.web.bind.annotation.RestController;
 public class AudioController {
   private final CatalogService catalog;
   private final ResilientStorageService storage;
+  private final AudioPlaybackTicketService tickets;
 
   public AudioController(
-      CatalogService catalog, ResilientStorageService storage) {
+      CatalogService catalog,
+      ResilientStorageService storage,
+      AudioPlaybackTicketService tickets) {
     this.catalog = catalog;
     this.storage = storage;
+    this.tickets = tickets;
+  }
+
+  @GetMapping("/{trackId}/ticket")
+  public AudioPlaybackTicketService.IssuedTicket ticket(@PathVariable String trackId) {
+    var track = catalog.trackDocument(trackId);
+    if (track.driveFileId() == null || track.driveFileId().isBlank()) {
+      throw new NotFoundException("This track has no uploaded audio.");
+    }
+    return tickets.issue(trackId);
   }
 
   @GetMapping("/{trackId}")
   public void stream(
-      @PathVariable String trackId, HttpServletRequest request, HttpServletResponse response)
+      @PathVariable String trackId,
+      @RequestParam(required = false) String ticket,
+      HttpServletRequest request,
+      HttpServletResponse response)
       throws IOException {
+    var authenticated =
+        request.getAttribute(com.telugutunes.api.config.AuthenticationFilter.MEMBER_ID_ATTRIBUTE)
+            != null;
+    if (!authenticated && !tickets.isValid(ticket, trackId)) {
+      response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "A valid playback ticket is required.");
+      return;
+    }
     var track = catalog.trackDocument(trackId);
     if (track.driveFileId() == null || track.driveFileId().isBlank()) {
       throw new NotFoundException("This track has no uploaded audio.");

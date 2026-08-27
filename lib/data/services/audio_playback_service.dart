@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:http/http.dart' as http;
 
 import '../../domain/models/music_models.dart';
 
@@ -164,15 +166,11 @@ class AudioPlaybackService {
   Future<AudioSource> _sourceForTrack(Track track) async {
     final localPath = await _localPathForTrack(track.id);
     final uri = localPath == null
-        ? Uri.parse('$_apiBaseUrl/audio/${track.id}').replace(
-            queryParameters: {
-              'v': track.audioVersion.isEmpty ? track.id : track.audioVersion,
-            },
-          )
+        ? await _remoteUriForTrack(track)
         : Uri.file(localPath);
     return AudioSource.uri(
       uri,
-      headers: localPath == null && _authToken.isNotEmpty
+      headers: localPath == null && !kIsWeb && _authToken.isNotEmpty
           ? {'Authorization': 'Bearer $_authToken'}
           : null,
       tag: MediaItem(
@@ -184,6 +182,26 @@ class AudioPlaybackService {
             track.artworkUrl.isEmpty ? null : Uri.tryParse(track.artworkUrl),
       ),
     );
+  }
+
+  Future<Uri> _remoteUriForTrack(Track track) async {
+    final query = <String, String>{
+      'v': track.audioVersion.isEmpty ? track.id : track.audioVersion,
+    };
+    if (kIsWeb) {
+      final response = await http.get(
+        Uri.parse('$_apiBaseUrl/audio/${track.id}/ticket'),
+        headers:
+            _authToken.isEmpty ? null : {'Authorization': 'Bearer $_authToken'},
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw StateError('Could not authorize browser audio playback.');
+      }
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      query['ticket'] = body['ticket'] as String;
+    }
+    return Uri.parse('$_apiBaseUrl/audio/${track.id}')
+        .replace(queryParameters: query);
   }
 
   List<Track> _normalizedQueue(Track track, List<Track> queue) {

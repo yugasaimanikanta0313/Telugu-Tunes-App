@@ -28,10 +28,16 @@ public class AuthenticationFilter extends OncePerRequestFilter {
             && (path.startsWith("/api/v1/home")
                 || path.startsWith("/api/v1/albums")
                 || path.startsWith("/api/v1/tracks/search"));
+    var ticketedAudioRead =
+        "GET".equalsIgnoreCase(request.getMethod())
+            && path.startsWith("/api/v1/audio/")
+            && !path.endsWith("/ticket")
+            && request.getParameter("ticket") != null;
     return "OPTIONS".equalsIgnoreCase(request.getMethod())
         || !path.startsWith("/api/v1/")
         || path.startsWith("/api/v1/auth/")
         || publicCatalogRead
+        || ticketedAudioRead
         || path.startsWith("/api/v1/storage/google-drive/")
         || path.startsWith("/actuator/");
   }
