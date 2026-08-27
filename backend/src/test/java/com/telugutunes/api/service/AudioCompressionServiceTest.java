@@ -12,14 +12,15 @@ import org.springframework.mock.web.MockMultipartFile;
 
 class AudioCompressionServiceTest {
   @Test
-  void compressesOversizedAudioToM4aBelowFiveMegabytes() throws Exception {
+  void compressesOversizedAudioToMp3BelowFiveMegabytes() throws Exception {
     Assumptions.assumeTrue(commandExists("ffmpeg") && commandExists("ffprobe"));
     var sourceBytes = oversizedWave();
     var source = new MockMultipartFile("file", "large-song.wav", "audio/wav", sourceBytes);
 
     try (var prepared = new AudioCompressionService().prepare(source)) {
       assertThat(prepared.compressed()).isTrue();
-      assertThat(prepared.file().getOriginalFilename()).endsWith(".m4a");
+      assertThat(prepared.file().getOriginalFilename()).endsWith(".mp3");
+      assertThat(prepared.file().getContentType()).isEqualTo("audio/mpeg");
       assertThat(prepared.originalBytes()).isEqualTo(sourceBytes.length);
       assertThat(prepared.storedBytes())
           .isPositive()

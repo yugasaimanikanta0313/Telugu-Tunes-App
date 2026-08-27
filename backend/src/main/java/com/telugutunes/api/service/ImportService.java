@@ -84,7 +84,7 @@ public class ImportService {
             media.objectId(),
             ImportStatus.READY,
             media.compressed()
-                ? "Audio compressed to M4A and uploaded to the private music library."
+                ? "Audio compressed to MP3 and uploaded to the private music library."
                 : "Audio uploaded to the private music library.");
     return ImportResponse.from(job, media);
   }

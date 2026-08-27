@@ -530,7 +530,7 @@ Future<void> _replaceTrackAudio(BuildContext context, Track track) async {
         title: const Text('Replace audio file?'),
         content: Text(
           needsCompression
-              ? '“${file.name}” is ${_megabytes(originalSize)}, which exceeds 5 MB. It will be converted to M4A and stored below 5 MB. Replace “${track.title}” with the compressed file?'
+              ? '“${file.name}” is ${_megabytes(originalSize)}, which exceeds 5 MB. It will be converted to a browser-safe MP3 and stored below 5 MB. Replace “${track.title}” with the compressed file?'
               : '“${track.title}” will keep its details, but play the new file “${file.name}”. The old private file will be removed.',
         ),
         actions: [

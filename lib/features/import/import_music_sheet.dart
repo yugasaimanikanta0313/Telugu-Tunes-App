@@ -101,7 +101,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
           builder: (dialogContext) => AlertDialog(
             title: const Text('Compress oversized audio?'),
             content: Text(
-              '$details\n\nThese files exceed 5 MB. Telugu Tunes will convert them to M4A and guarantee each stored file is no larger than 5 MB. Continue?',
+              '$details\n\nThese files exceed 5 MB. Telugu Tunes will convert them to a browser-safe MP3 and guarantee each stored file is no larger than 5 MB. Continue?',
             ),
             actions: [
               TextButton(
@@ -243,7 +243,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         final file = _audioFiles[_uploadFileIndex];
         final bytes = file.bytes?.length ?? file.size;
         if (_uploadElapsedSeconds >= 12 && bytes > _maximumStoredAudioBytes) {
-          _uploadStage = 'Compressing to M4A below 5 MB, then saving to OCI…';
+          _uploadStage = 'Compressing to MP3 below 5 MB, then saving to OCI…';
         } else if (_uploadElapsedSeconds >= 12) {
           _uploadStage = 'Saving the song to OCI storage…';
         }

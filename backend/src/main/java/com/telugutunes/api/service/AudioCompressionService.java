@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-/** Transcodes oversized uploads to AAC/M4A and guarantees the stored object is at most 5 MB. */
+/** Transcodes oversized uploads to browser-safe MP3 and guarantees storage below 5 MB. */
 @Service
 public class AudioCompressionService {
   public static final long MAX_STORED_BYTES = 5_000_000L;
@@ -31,13 +31,13 @@ public class AudioCompressionService {
       var durationSeconds = probeDuration(input);
       var bitrate = initialBitrate(durationSeconds);
       for (var attempt = 0; attempt < 5; attempt++) {
-        output = Files.createTempFile("telugu-tunes-compressed-", ".m4a");
+        output = Files.createTempFile("telugu-tunes-compressed-", ".mp3");
         transcode(input, output, bitrate);
         var storedBytes = Files.size(output);
         if (storedBytes > 0 && storedBytes <= MAX_STORED_BYTES) {
           var preparedFile =
               new PathMultipartFile(
-                  "file", compressedName(source.getOriginalFilename()), "audio/mp4", output);
+                  "file", compressedName(source.getOriginalFilename()), "audio/mpeg", output);
           output = null;
           return new PreparedAudio(
               preparedFile, source.getSize(), storedBytes, true, preparedFile.path());
@@ -96,11 +96,11 @@ public class AudioCompressionService {
                 "-map_metadata",
                 "-1",
                 "-c:a",
-                "aac",
+                "libmp3lame",
                 "-b:a",
                 Long.toString(bitrate),
-                "-movflags",
-                "+faststart",
+                "-id3v2_version",
+                "3",
                 output.toString())
             .redirectErrorStream(true)
             .start();
@@ -135,7 +135,7 @@ public class AudioCompressionService {
     var candidate = originalName == null || originalName.isBlank() ? "uploaded-track" : originalName;
     var dot = candidate.lastIndexOf('.');
     var base = dot > 0 ? candidate.substring(0, dot) : candidate;
-    return base + ".m4a";
+    return base + ".mp3";
   }
 
   private String suffix(String fileName) {
