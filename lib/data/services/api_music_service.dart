@@ -187,6 +187,10 @@ class SpringBootMusicApiService implements MusicApiService {
       'artworkUrl': playlist.artworkUrl,
       'trackIds': playlist.tracks.map((track) => track.id).toList(),
       'active': playlist.active,
+      'scheduleEnabled': playlist.scheduleEnabled,
+      'scheduleDays': playlist.scheduleDays,
+      'scheduleStart': playlist.scheduleStart,
+      'scheduleEnd': playlist.scheduleEnd,
     };
     return _recommendedPlaylist(playlist.id.isEmpty
         ? await _postMap('/recommended-playlists', body)
@@ -781,6 +785,12 @@ class SpringBootMusicApiService implements MusicApiService {
         artworkUrl: json['artworkUrl'] as String? ?? '',
         tracks: _list(json['tracks']).map(_track).toList(),
         active: json['active'] as bool? ?? true,
+        scheduleEnabled: json['scheduleEnabled'] as bool? ?? false,
+        scheduleDays: _list(json['scheduleDays'])
+            .map((value) => (value as num).toInt())
+            .toList(),
+        scheduleStart: json['scheduleStart'] as String? ?? '',
+        scheduleEnd: json['scheduleEnd'] as String? ?? '',
       );
 
   AdminMember _adminMember(Map<String, dynamic> json) => AdminMember(

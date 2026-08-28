@@ -12,4 +12,8 @@ public record RecommendedPlaylistRequest(
     @Size(max = 7) String color,
     @Size(max = 2000) String artworkUrl,
     List<String> trackIds,
-    Boolean active) {}
+    Boolean active,
+    Boolean scheduleEnabled,
+    List<Integer> scheduleDays,
+    @Size(max = 5) String scheduleStart,
+    @Size(max = 5) String scheduleEnd) {}

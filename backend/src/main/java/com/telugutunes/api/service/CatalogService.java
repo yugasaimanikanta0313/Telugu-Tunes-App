@@ -376,7 +376,20 @@ public class CatalogService {
   public void removeAlbum(String memberId, String albumId) {
     auth.requireAdministrator(memberId);
     if ("unsorted-music".equals(albumId)) {
-      throw new IllegalArgumentException("The Unsorted music album cannot be removed.");
+      var album = albums.findById(albumId)
+          .orElseThrow(() -> new NotFoundException("Album not found."));
+      var now = Instant.now();
+      for (var track : tracks.findAllById(album.trackIds())) {
+        tracks.save(new TrackDocument(track.id(), track.title(), track.artist(), "Unsorted music",
+            "unsorted-music", track.duration(), track.durationSeconds(), track.artworkColor(),
+            track.singers(), track.musicDirector(), track.genre(), track.artworkUrl(), track.sourceUrl(),
+            track.driveFileId(), track.mimeType(), track.uploadedByMemberId(), track.createdAt()));
+      }
+      albums.save(new AlbumDocument("unsorted-music", "Unsorted music", "Your private collection",
+          "Songs retained after an album grouping was removed.",
+          now.atZone(java.time.ZoneOffset.UTC).getYear(), "7C4DFF", "", false,
+          album.trackIds(), album.createdAt()));
+      return;
     }
     var album = albums.findById(albumId).orElseThrow(() -> new NotFoundException("Album not found."));
     var now = Instant.now();

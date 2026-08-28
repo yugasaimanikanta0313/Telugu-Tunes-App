@@ -11,4 +11,8 @@ public record RecommendedPlaylistResponse(
     String color,
     String artworkUrl,
     List<TrackResponse> tracks,
-    boolean active) {}
+    boolean active,
+    boolean scheduleEnabled,
+    List<Integer> scheduleDays,
+    String scheduleStart,
+    String scheduleEnd) {}

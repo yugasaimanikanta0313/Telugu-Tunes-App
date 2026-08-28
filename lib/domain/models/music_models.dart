@@ -177,6 +177,10 @@ class RecommendedPlaylist {
     required this.tracks,
     this.artworkUrl = '',
     this.active = true,
+    this.scheduleEnabled = false,
+    this.scheduleDays = const [],
+    this.scheduleStart = '',
+    this.scheduleEnd = '',
   });
 
   final String id;
@@ -188,6 +192,23 @@ class RecommendedPlaylist {
   final String artworkUrl;
   final List<Track> tracks;
   final bool active;
+  final bool scheduleEnabled;
+  final List<int> scheduleDays;
+  final String scheduleStart;
+  final String scheduleEnd;
+
+  String get scheduleLabel {
+    if (!scheduleEnabled) return 'Available anytime';
+    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final days = scheduleDays
+        .where((day) => day >= 1 && day <= 7)
+        .map((day) => names[day - 1])
+        .join(', ');
+    final time = scheduleStart.isEmpty || scheduleEnd.isEmpty
+        ? 'All day'
+        : '$scheduleStart–$scheduleEnd';
+    return '${days.isEmpty ? 'Every day' : days} • $time';
+  }
 }
 
 class RecommendationVoteSuggestion {

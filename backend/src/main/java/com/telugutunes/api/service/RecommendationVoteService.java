@@ -79,7 +79,8 @@ public class RecommendationVoteService {
       ids.add(trackId);
       playlists.save(new RecommendedPlaylistDocument(playlist.id(), playlist.name(), playlist.description(),
           playlist.type(), playlist.subtype(), playlist.artworkColor(), playlist.artworkUrl(), ids,
-          playlist.active(), playlist.createdAt(), Instant.now()));
+          playlist.active(), playlist.scheduleEnabled(), playlist.scheduleDays(), playlist.scheduleStart(),
+          playlist.scheduleEnd(), playlist.createdAt(), Instant.now()));
     }
     var now = Instant.now();
     votes.saveAll(pending.stream().map(value -> new RecommendationVoteDocument(value.id(), value.memberId(),

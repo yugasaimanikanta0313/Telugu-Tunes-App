@@ -19,7 +19,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    expect(find.text('నమస్కారం, Srinu'), findsOneWidget);
+    expect(find.text('Namasthe!, Srinu'), findsOneWidget);
     expect(find.text('Recently played'), findsOneWidget);
     expect(find.text('Tune AI'), findsOneWidget);
   });

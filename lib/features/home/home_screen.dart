@@ -26,11 +26,13 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      Text('నమస్కారం, ${controller.memberName}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w900)),
+                      Text(
+  'Namasthe!, ${controller.memberName}',
+  style: Theme.of(context)
+      .textTheme
+      .headlineSmall
+      ?.copyWith(fontWeight: FontWeight.w900),
+),
                       const SizedBox(height: 3),
                       Text('Your private Telugu music space',
                           style: Theme.of(context).textTheme.bodyMedium),
@@ -58,7 +60,8 @@ class HomeScreen extends StatelessWidget {
                   final playlist = controller.recommendedPlaylists[index];
                   return CollectionCard(
                     title: playlist.name,
-                    subtitle: '${playlist.type} • ${playlist.subtype}',
+                    subtitle:
+                        '${playlist.type} • ${playlist.subtype}\n${playlist.scheduleLabel}',
                     color: playlist.color,
                     imageUrl: playlist.artworkUrl,
                     onTap: () => _showRecommended(context, playlist),
@@ -281,7 +284,7 @@ class HomeScreen extends StatelessWidget {
             title: Text(playlist.name,
                 style: const TextStyle(fontWeight: FontWeight.w900)),
             subtitle: Text(
-                '${playlist.type} • ${playlist.subtype}\n${playlist.description}'),
+                '${playlist.type} • ${playlist.subtype}\n${playlist.scheduleLabel}\n${playlist.description}'),
             isThreeLine: true,
           ),
           ...playlist.tracks.map((track) => TrackTile(

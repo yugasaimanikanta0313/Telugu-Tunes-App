@@ -74,7 +74,8 @@ class _RecommendedPlaylistsScreenState
                                 size: 52),
                             title: Text(item.name),
                             subtitle: Text(
-                                '${item.type} • ${item.subtype} • ${item.tracks.length} songs${item.active ? '' : ' • Hidden'}'),
+                                '${item.type} • ${item.subtype} • ${item.tracks.length} songs${item.active ? '' : ' • Hidden'}\n${item.scheduleLabel}'),
+                            isThreeLine: true,
                             trailing: const Icon(Icons.edit_outlined),
                             onTap: () => _edit(item),
                           ))),
@@ -105,6 +106,10 @@ class _RecommendedPlaylistsScreenState
     final customSubtype = TextEditingController(
         text: subtypeChoice == customChoice ? initialSubtype : '');
     var active = existing?.active ?? true;
+    var scheduleEnabled = existing?.scheduleEnabled ?? false;
+    final scheduleDays = <int>{...?existing?.scheduleDays};
+    var scheduleStart = existing?.scheduleStart ?? '';
+    var scheduleEnd = existing?.scheduleEnd ?? '';
     var catalogQuery = '';
     final selected = <String>{
       if (existing != null) ...existing.tracks.map((track) => track.id),
@@ -190,6 +195,94 @@ class _RecommendedPlaylistsScreenState
                                 onChanged: (v) =>
                                     setDialogState(() => active = v),
                                 title: const Text('Visible to listeners')),
+                            Card(
+                              margin: const EdgeInsets.only(top: 8),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      value: scheduleEnabled,
+                                      onChanged: (value) => setDialogState(
+                                          () => scheduleEnabled = value),
+                                      secondary: const Icon(Icons.auto_awesome_rounded),
+                                      title: const Text('Schedule this playlist'),
+                                      subtitle: const Text(
+                                          'Choose when this subtype should be highlighted.'),
+                                    ),
+                                    if (scheduleEnabled) ...[
+                                      const Text('Days of the week',
+                                          style: TextStyle(fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 8),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: List.generate(7, (index) {
+                                          const labels = [
+                                            'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
+                                          ];
+                                          final day = index + 1;
+                                          return FilterChip(
+                                            label: Text(labels[index]),
+                                            selected: scheduleDays.contains(day),
+                                            onSelected: (selectedDay) => setDialogState(() {
+                                              selectedDay
+                                                  ? scheduleDays.add(day)
+                                                  : scheduleDays.remove(day);
+                                            }),
+                                          );
+                                        }),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Row(children: [
+                                        Expanded(child: OutlinedButton.icon(
+                                          icon: const Icon(Icons.wb_sunny_outlined),
+                                          label: Text(scheduleStart.isEmpty
+                                              ? 'Starts anytime'
+                                              : 'From $scheduleStart'),
+                                          onPressed: () async {
+                                            final picked = await showTimePicker(
+                                              context: dialogContext,
+                                              initialTime: _time(scheduleStart, const TimeOfDay(hour: 6, minute: 0)),
+                                            );
+                                            if (picked != null) setDialogState(
+                                                () => scheduleStart = _clock(picked));
+                                          },
+                                        )),
+                                        const SizedBox(width: 8),
+                                        Expanded(child: OutlinedButton.icon(
+                                          icon: const Icon(Icons.nights_stay_outlined),
+                                          label: Text(scheduleEnd.isEmpty
+                                              ? 'Ends anytime'
+                                              : 'Until $scheduleEnd'),
+                                          onPressed: () async {
+                                            final picked = await showTimePicker(
+                                              context: dialogContext,
+                                              initialTime: _time(scheduleEnd, const TimeOfDay(hour: 22, minute: 0)),
+                                            );
+                                            if (picked != null) setDialogState(
+                                                () => scheduleEnd = _clock(picked));
+                                          },
+                                        )),
+                                      ]),
+                                      if (scheduleStart.isNotEmpty || scheduleEnd.isNotEmpty)
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: TextButton(
+                                            onPressed: () => setDialogState(() {
+                                              scheduleStart = '';
+                                              scheduleEnd = '';
+                                            }),
+                                            child: const Text('Use all day'),
+                                          ),
+                                        ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
                             const Divider(),
                             TextField(
                               decoration: const InputDecoration(
@@ -270,7 +363,11 @@ class _RecommendedPlaylistsScreenState
                                   tracks: music.allTracks
                                       .where((t) => selected.contains(t.id))
                                       .toList(),
-                                  active: active));
+                                  active: active,
+                                  scheduleEnabled: scheduleEnabled,
+                                  scheduleDays: scheduleDays.toList()..sort(),
+                                  scheduleStart: scheduleStart,
+                                  scheduleEnd: scheduleEnd));
                           if (dialogContext.mounted)
                             Navigator.pop(dialogContext, true);
                         },
@@ -283,4 +380,15 @@ class _RecommendedPlaylistsScreenState
     customSubtype.dispose();
     if (saved == true) await _load();
   }
+
+  TimeOfDay _time(String value, TimeOfDay fallback) {
+    final parts = value.split(':');
+    if (parts.length != 2) return fallback;
+    return TimeOfDay(
+        hour: int.tryParse(parts[0]) ?? fallback.hour,
+        minute: int.tryParse(parts[1]) ?? fallback.minute);
+  }
+
+  String _clock(TimeOfDay value) =>
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
 }
