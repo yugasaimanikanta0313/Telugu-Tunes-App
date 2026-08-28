@@ -13,6 +13,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<MusicController>();
+    final recommended = _groupRecommendations(controller.recommendedPlaylists);
     if (controller.loading)
       return const Center(child: CircularProgressIndicator());
     return CustomScrollView(
@@ -83,7 +84,7 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           ),
-        if (controller.recommendedPlaylists.isNotEmpty) ...[
+        if (recommended.isNotEmpty) ...[
           const SliverToBoxAdapter(
               child: SectionTitle(title: 'Recommended playlists')),
           SliverToBoxAdapter(
@@ -92,13 +93,13 @@ class HomeScreen extends StatelessWidget {
               child: ListView.builder(
                 padding: const EdgeInsets.only(left: 20),
                 scrollDirection: Axis.horizontal,
-                itemCount: controller.recommendedPlaylists.length,
+                itemCount: recommended.length,
                 itemBuilder: (context, index) {
-                  final playlist = controller.recommendedPlaylists[index];
+                  final playlist = recommended[index];
                   return CollectionCard(
                     title: playlist.name,
                     subtitle:
-                        '${playlist.type} • ${playlist.subtype}\n${playlist.scheduleLabel}',
+                        '${playlist.type} • ${playlist.subtype}\nAvailable now',
                     color: playlist.color,
                     imageUrl: playlist.artworkUrl,
                     onTap: () => _showRecommended(context, playlist),
@@ -304,6 +305,36 @@ class HomeScreen extends StatelessWidget {
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
     );
+  }
+
+  List<RecommendedPlaylist> _groupRecommendations(
+      List<RecommendedPlaylist> source) {
+    final groups = <String, List<RecommendedPlaylist>>{};
+    for (final item in source) {
+      final key =
+          '${item.name.trim().toLowerCase()}|${item.type.trim().toLowerCase()}';
+      groups.putIfAbsent(key, () => []).add(item);
+    }
+    return groups.values.map((variants) {
+      final first = variants.first;
+      final tracks = <String, Track>{};
+      for (final variant in variants) {
+        for (final track in variant.tracks) {
+          tracks.putIfAbsent(track.id, () => track);
+        }
+      }
+      final subtypes = variants.map((item) => item.subtype).toSet().join(' • ');
+      return RecommendedPlaylist(
+        id: first.id,
+        name: first.name,
+        description: first.description,
+        type: first.type,
+        subtype: subtypes,
+        color: first.color,
+        artworkUrl: first.artworkUrl,
+        tracks: tracks.values.toList(),
+      );
+    }).toList();
   }
 
   void _showRecommended(BuildContext context, RecommendedPlaylist playlist) {

@@ -49,75 +49,116 @@ class _RecommendedPlaylistsScreenState
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Recommended playlists')),
-        floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => _edit(),
-            icon: const Icon(Icons.add),
-            label: const Text('Create')),
-        body: loading
-            ? const Center(child: CircularProgressIndicator())
-            : loadError != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.cloud_off_rounded, size: 48),
-                        const SizedBox(height: 12),
-                        const Text(
-                            'Recommended playlists could not be loaded.'),
-                        const SizedBox(height: 8),
-                        Text(loadError!, textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _load,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Try again'),
-                        ),
-                      ]),
-                    ),
-                  )
-                : ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      const Text(
-                          'These playlists are curated by administrators and shown to every listener.'),
+  Widget build(BuildContext context) {
+    final groups = _groups();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Recommended playlists')),
+      floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => _edit(),
+          icon: const Icon(Icons.add),
+          label: const Text('Create')),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : loadError != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.cloud_off_rounded, size: 48),
                       const SizedBox(height: 12),
-                      TextField(
-                        decoration: const InputDecoration(
-                          labelText: 'Search existing playlists',
-                          hintText: 'Name, type or subtype',
-                          prefixIcon: Icon(Icons.search_rounded),
-                        ),
-                        onChanged: (value) => setState(
-                            () => playlistQuery = value.trim().toLowerCase()),
+                      const Text('Recommended playlists could not be loaded.'),
+                      const SizedBox(height: 8),
+                      Text(loadError!, textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _load,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Try again'),
                       ),
-                      const SizedBox(height: 12),
-                      ...items
-                          .where((item) =>
-                              playlistQuery.isEmpty ||
-                              '${item.name} ${item.type} ${item.subtype}'
-                                  .toLowerCase()
-                                  .contains(playlistQuery))
-                          .map((item) => Card(
-                                  child: ListTile(
-                                leading: Artwork(
-                                    color: item.color,
-                                    label: item.name,
-                                    imageUrl: item.artworkUrl,
-                                    size: 52),
-                                title: Text(item.name),
-                                subtitle: Text(
-                                    '${item.type} • ${item.subtype} • ${item.tracks.length} songs${item.active ? '' : ' • Hidden'}\n${item.scheduleLabel}'),
-                                isThreeLine: true,
-                                trailing: const Icon(Icons.edit_outlined),
-                                onTap: () => _edit(item),
-                              ))),
-                    ],
+                    ]),
                   ),
-      );
+                )
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    const Text(
+                        'These playlists are curated by administrators and shown to every listener.'),
+                    const SizedBox(height: 12),
+                    TextField(
+                      decoration: const InputDecoration(
+                        labelText: 'Search existing playlists',
+                        hintText: 'Name, type or subtype',
+                        prefixIcon: Icon(Icons.search_rounded),
+                      ),
+                      onChanged: (value) => setState(
+                          () => playlistQuery = value.trim().toLowerCase()),
+                    ),
+                    const SizedBox(height: 12),
+                    ...groups.map((group) => Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: ExpansionTile(
+                            leading: Artwork(
+                                color: group.first.color,
+                                label: group.name,
+                                imageUrl: group.first.artworkUrl,
+                                size: 52),
+                            title: Text(group.name),
+                            subtitle: Text(
+                                '${group.type} • ${group.variants.length} subtype${group.variants.length == 1 ? '' : 's'}'),
+                            children: [
+                              ...group.variants.map((item) => ListTile(
+                                    contentPadding: const EdgeInsets.only(
+                                        left: 28, right: 16),
+                                    leading: const Icon(
+                                        Icons.subdirectory_arrow_right_rounded),
+                                    title: Text(item.subtype),
+                                    subtitle: Text(
+                                        '${item.tracks.length} songs${item.active ? '' : ' • Hidden'}\n${item.scheduleLabel}'),
+                                    isThreeLine: true,
+                                    trailing: const Icon(Icons.edit_outlined),
+                                    onTap: () => _edit(item),
+                                  )),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _edit(group.first, true),
+                                    icon: const Icon(Icons.add_rounded),
+                                    label: const Text('Add subtype'),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                  ],
+                ),
+    );
+  }
 
-  Future<void> _edit([RecommendedPlaylist? existing]) async {
+  List<_RecommendedPlaylistGroup> _groups() {
+    final grouped = <String, List<RecommendedPlaylist>>{};
+    for (final item in items) {
+      final searchable =
+          '${item.name} ${item.type} ${item.subtype}'.toLowerCase();
+      if (playlistQuery.isNotEmpty && !searchable.contains(playlistQuery)) {
+        continue;
+      }
+      final key =
+          '${item.name.trim().toLowerCase()}|${item.type.trim().toLowerCase()}';
+      grouped.putIfAbsent(key, () => []).add(item);
+    }
+    return grouped.values.map((variants) {
+      variants.sort((a, b) => a.subtype.compareTo(b.subtype));
+      return _RecommendedPlaylistGroup(variants);
+    }).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+  Future<void> _edit(
+      [RecommendedPlaylist? existing, bool createSubtype = false]) async {
     final music = context.read<MusicController>();
     final name = TextEditingController(text: existing?.name ?? '');
     final description =
@@ -132,8 +173,20 @@ class _RecommendedPlaylistsScreenState
         text: typeChoice == customChoice ? initialType : '');
     final initialSubtypes =
         recommendedPlaylistSubtypes[initialType] ?? const [];
-    final initialSubtype = existing?.subtype ??
-        (initialSubtypes.isEmpty ? '' : initialSubtypes.first);
+    final usedSubtypes = createSubtype && existing != null
+        ? items
+            .where((item) =>
+                item.name.toLowerCase() == existing.name.toLowerCase() &&
+                item.type.toLowerCase() == existing.type.toLowerCase())
+            .map((item) => item.subtype.toLowerCase())
+            .toSet()
+        : const <String>{};
+    final initialSubtype = createSubtype
+        ? initialSubtypes.firstWhere(
+            (value) => !usedSubtypes.contains(value.toLowerCase()),
+            orElse: () => '')
+        : existing?.subtype ??
+            (initialSubtypes.isEmpty ? '' : initialSubtypes.first);
     var subtypeChoice = initialSubtypes.contains(initialSubtype)
         ? initialSubtype
         : customChoice;
@@ -146,15 +199,18 @@ class _RecommendedPlaylistsScreenState
     var scheduleEnd = existing?.scheduleEnd ?? '';
     var catalogQuery = '';
     final selected = <String>{
-      if (existing != null) ...existing.tracks.map((track) => track.id),
+      if (existing != null && !createSubtype)
+        ...existing.tracks.map((track) => track.id),
     };
     final saved = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(
             builder: (_, setDialogState) => AlertDialog(
-                  title: Text(existing == null
-                      ? 'Create recommendation'
-                      : 'Edit recommendation'),
+                  title: Text(createSubtype
+                      ? 'Add subtype to ${existing?.name}'
+                      : existing == null
+                          ? 'Create recommendation'
+                          : 'Edit recommendation'),
                   content: SizedBox(
                       width: 600,
                       child: SingleChildScrollView(
@@ -163,6 +219,7 @@ class _RecommendedPlaylistsScreenState
                               children: <Widget>[
                             TextField(
                                 controller: name,
+                                readOnly: createSubtype,
                                 decoration: const InputDecoration(
                                     labelText: 'Playlist name')),
                             TextField(
@@ -180,17 +237,19 @@ class _RecommendedPlaylistsScreenState
                                     .map((v) => DropdownMenuItem(
                                         value: v, child: Text(v)))
                                     .toList(),
-                                onChanged: (v) {
-                                  if (v != null) {
-                                    setDialogState(() {
-                                      typeChoice = v;
-                                      final choices =
-                                          recommendedPlaylistSubtypes[v];
-                                      subtypeChoice =
-                                          choices?.first ?? customChoice;
-                                    });
-                                  }
-                                }),
+                                onChanged: createSubtype
+                                    ? null
+                                    : (v) {
+                                        if (v != null) {
+                                          setDialogState(() {
+                                            typeChoice = v;
+                                            final choices =
+                                                recommendedPlaylistSubtypes[v];
+                                            subtypeChoice =
+                                                choices?.first ?? customChoice;
+                                          });
+                                        }
+                                      }),
                             if (typeChoice == customChoice)
                               TextField(
                                 controller: customType,
@@ -389,7 +448,7 @@ class _RecommendedPlaylistsScreenState
                                     }))),
                           ]))),
                   actions: [
-                    if (existing != null)
+                    if (existing != null && !createSubtype)
                       TextButton(
                           onPressed: () async {
                             await music.deleteRecommendedPlaylist(existing.id);
@@ -412,7 +471,7 @@ class _RecommendedPlaylistsScreenState
                           if (type.isEmpty || subtype.isEmpty) return;
                           await music.saveRecommendedPlaylist(
                               RecommendedPlaylist(
-                                  id: existing?.id ?? '',
+                                  id: createSubtype ? '' : existing?.id ?? '',
                                   name: name.text.trim(),
                                   description: description.text.trim(),
                                   type: type,
@@ -450,4 +509,12 @@ class _RecommendedPlaylistsScreenState
 
   String _clock(TimeOfDay value) =>
       '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+}
+
+class _RecommendedPlaylistGroup {
+  _RecommendedPlaylistGroup(this.variants);
+  final List<RecommendedPlaylist> variants;
+  RecommendedPlaylist get first => variants.first;
+  String get name => first.name;
+  String get type => first.type;
 }
