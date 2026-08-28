@@ -7,6 +7,7 @@ import com.telugutunes.api.exception.NotFoundException;
 import com.telugutunes.api.repository.RecommendedPlaylistRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashMap;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,7 +23,11 @@ public class RecommendedPlaylistService {
   }
 
   public List<RecommendedPlaylistResponse> publicList() {
-    return repository.findByActiveTrueOrderByUpdatedAtDesc().stream().map(this::response).toList();
+    var unique = new LinkedHashMap<String, RecommendedPlaylistDocument>();
+    for (var item : repository.findByActiveTrueOrderByUpdatedAtDesc()) {
+      unique.putIfAbsent(key(item.name(), item.type(), item.subtype()), item);
+    }
+    return unique.values().stream().map(this::response).toList();
   }
 
   public List<RecommendedPlaylistResponse> adminList(String memberId) {
@@ -32,6 +37,13 @@ public class RecommendedPlaylistService {
 
   public RecommendedPlaylistResponse save(String memberId, String id, RecommendedPlaylistRequest request) {
     auth.requireAdministrator(memberId);
+    repository.findFirstByNameIgnoreCaseAndTypeIgnoreCaseAndSubtypeIgnoreCase(
+        request.name().trim(), request.type().trim(), request.subtype().trim())
+        .filter(value -> id == null || !value.id().equals(id))
+        .ifPresent(value -> {
+          throw new IllegalArgumentException(
+              "This recommended playlist already exists. Search for it and add songs there.");
+        });
     var existing = id == null ? null : repository.findById(id)
         .orElseThrow(() -> new NotFoundException("Recommended playlist not found."));
     var trackIds = request.trackIds() == null ? List.<String>of() : request.trackIds().stream().distinct().toList();
@@ -60,4 +72,8 @@ public class RecommendedPlaylistService {
 
   private String clean(String value) { return value == null ? "" : value.trim(); }
   private String defaultValue(String value, String fallback) { return value == null || value.isBlank() ? fallback : value.trim(); }
+  private String key(String name, String type, String subtype) {
+    return (clean(name) + "|" + clean(type) + "|" + clean(subtype))
+        .toLowerCase(java.util.Locale.ROOT);
+  }
 }

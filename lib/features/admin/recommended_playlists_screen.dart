@@ -17,6 +17,7 @@ class _RecommendedPlaylistsScreenState
     extends State<RecommendedPlaylistsScreen> {
   List<RecommendedPlaylist> items = const [];
   bool loading = true;
+  String playlistQuery = '';
   @override
   void initState() {
     super.initState();
@@ -48,19 +49,35 @@ class _RecommendedPlaylistsScreenState
                   const Text(
                       'These playlists are curated by administrators and shown to every listener.'),
                   const SizedBox(height: 12),
-                  ...items.map((item) => Card(
-                          child: ListTile(
-                        leading: Artwork(
-                            color: item.color,
-                            label: item.name,
-                            imageUrl: item.artworkUrl,
-                            size: 52),
-                        title: Text(item.name),
-                        subtitle: Text(
-                            '${item.type} • ${item.subtype} • ${item.tracks.length} songs${item.active ? '' : ' • Hidden'}'),
-                        trailing: const Icon(Icons.edit_outlined),
-                        onTap: () => _edit(item),
-                      ))),
+                  TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'Search existing playlists',
+                      hintText: 'Name, type or subtype',
+                      prefixIcon: Icon(Icons.search_rounded),
+                    ),
+                    onChanged: (value) => setState(
+                        () => playlistQuery = value.trim().toLowerCase()),
+                  ),
+                  const SizedBox(height: 12),
+                  ...items
+                      .where((item) =>
+                          playlistQuery.isEmpty ||
+                          '${item.name} ${item.type} ${item.subtype}'
+                              .toLowerCase()
+                              .contains(playlistQuery))
+                      .map((item) => Card(
+                              child: ListTile(
+                            leading: Artwork(
+                                color: item.color,
+                                label: item.name,
+                                imageUrl: item.artworkUrl,
+                                size: 52),
+                            title: Text(item.name),
+                            subtitle: Text(
+                                '${item.type} • ${item.subtype} • ${item.tracks.length} songs${item.active ? '' : ' • Hidden'}'),
+                            trailing: const Icon(Icons.edit_outlined),
+                            onTap: () => _edit(item),
+                          ))),
                 ],
               ),
       );
