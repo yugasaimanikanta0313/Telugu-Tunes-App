@@ -11,6 +11,11 @@ abstract class MusicRepository {
   Future<List<Track>> search(String query);
   Future<List<Album>> getAlbums();
   Future<List<Playlist>> getPlaylists();
+  Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
+      {bool admin = false});
+  Future<RecommendedPlaylist> saveRecommendedPlaylist(
+      RecommendedPlaylist playlist);
+  Future<void> deleteRecommendedPlaylist(String id);
   Future<List<Track>> getFavorites();
   Future<List<Track>> setFavorite(String trackId, bool favorite);
   Future<ListeningRoom?> getRoom();
@@ -84,6 +89,17 @@ class SpringBootMusicRepository implements MusicRepository {
   Future<List<Album>> getAlbums() => _api.getAlbums();
   @override
   Future<List<Playlist>> getPlaylists() => _api.getPlaylists();
+  @override
+  Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
+          {bool admin = false}) =>
+      _api.getRecommendedPlaylists(admin: admin);
+  @override
+  Future<RecommendedPlaylist> saveRecommendedPlaylist(
+          RecommendedPlaylist playlist) =>
+      _api.saveRecommendedPlaylist(playlist);
+  @override
+  Future<void> deleteRecommendedPlaylist(String id) =>
+      _api.deleteRecommendedPlaylist(id);
   @override
   Future<List<Track>> getFavorites() => _api.getFavorites();
   @override
@@ -368,6 +384,19 @@ class MockMusicRepository implements MusicRepository {
             color: 'FF7043',
             tracks: [_tracks[5], _tracks[3], _tracks[1]]),
       ];
+
+  @override
+  Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
+          {bool admin = false}) async =>
+      const [];
+
+  @override
+  Future<RecommendedPlaylist> saveRecommendedPlaylist(
+          RecommendedPlaylist playlist) async =>
+      playlist;
+
+  @override
+  Future<void> deleteRecommendedPlaylist(String id) async {}
 
   @override
   Future<List<Track>> getFavorites() async =>

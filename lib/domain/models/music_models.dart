@@ -166,6 +166,70 @@ class Playlist {
       );
 }
 
+class RecommendedPlaylist {
+  const RecommendedPlaylist({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.type,
+    required this.subtype,
+    required this.color,
+    required this.tracks,
+    this.artworkUrl = '',
+    this.active = true,
+  });
+
+  final String id;
+  final String name;
+  final String description;
+  final String type;
+  final String subtype;
+  final String color;
+  final String artworkUrl;
+  final List<Track> tracks;
+  final bool active;
+}
+
+const recommendedPlaylistSubtypes = <String, List<String>>{
+  'Devotional': ['Shiva', 'Venkateswara', 'Hanuman', 'Gospel', 'Sufi'],
+  'Workout & Fitness': ['Leg Day', 'HIIT', 'Cardio/Running', 'Yoga/Stretching'],
+  'Focus & Work': [
+    'Deep Coding',
+    'Reading',
+    'Lo-Fi Study',
+    'Ambient White Noise'
+  ],
+  'Mood & Emotion': [
+    'Uplifting/Happy',
+    'Melancholy/Heartbreak',
+    'Calming',
+    'Hype'
+  ],
+  'Party & Celebration': [
+    'Weekend Pre-game',
+    'House Party',
+    'Club Dance',
+    'Sundowner'
+  ],
+  'Sleep & Wellness': [
+    'Guided Meditation',
+    'Deep Sleep',
+    'Binaural Delta Waves',
+    'Rain Sounds'
+  ],
+  'Travel & Commute': [
+    'Daily Car Commute',
+    'Highway Long Drive',
+    'Scenic Chill'
+  ],
+  'Nostalgia & Era': [
+    '80s Classics',
+    '90s Hits',
+    '2000s Bollywood',
+    'Retro Indipop'
+  ],
+};
+
 class ListeningRoom {
   const ListeningRoom({
     required this.id,

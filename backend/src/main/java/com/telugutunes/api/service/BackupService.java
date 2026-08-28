@@ -4,6 +4,7 @@ import com.telugutunes.api.api.dto.BackupSnapshot;
 import com.telugutunes.api.repository.AlbumRepository;
 import com.telugutunes.api.repository.LyricsRepository;
 import com.telugutunes.api.repository.PlaylistRepository;
+import com.telugutunes.api.repository.RecommendedPlaylistRepository;
 import com.telugutunes.api.repository.TrackRepository;
 import java.time.Instant;
 import java.util.List;
@@ -15,17 +16,20 @@ public class BackupService {
   private final AlbumRepository albums;
   private final PlaylistRepository playlists;
   private final LyricsRepository lyrics;
+  private final RecommendedPlaylistRepository recommendedPlaylists;
   private final AuthService auth;
 
   public BackupService(
       TrackRepository tracks,
       AlbumRepository albums,
       PlaylistRepository playlists,
+      RecommendedPlaylistRepository recommendedPlaylists,
       LyricsRepository lyrics,
       AuthService auth) {
     this.tracks = tracks;
     this.albums = albums;
     this.playlists = playlists;
+    this.recommendedPlaylists = recommendedPlaylists;
     this.lyrics = lyrics;
     this.auth = auth;
   }
@@ -33,7 +37,8 @@ public class BackupService {
   public BackupSnapshot exportSnapshot(String administratorId) {
     auth.requireAdministrator(administratorId);
     return new BackupSnapshot(
-        1, Instant.now(), tracks.findAll(), albums.findAll(), playlists.findAll(), lyrics.findAll());
+        1, Instant.now(), tracks.findAll(), albums.findAll(), playlists.findAll(),
+        recommendedPlaylists.findAll(), lyrics.findAll());
   }
 
   /** Merge restore is intentionally non-destructive: records absent from a backup remain untouched. */
@@ -45,6 +50,7 @@ public class BackupService {
     tracks.saveAll(snapshot.tracks() == null ? List.of() : snapshot.tracks());
     albums.saveAll(snapshot.albums() == null ? List.of() : snapshot.albums());
     playlists.saveAll(snapshot.playlists() == null ? List.of() : snapshot.playlists());
+    recommendedPlaylists.saveAll(snapshot.recommendedPlaylists() == null ? List.of() : snapshot.recommendedPlaylists());
     lyrics.saveAll(snapshot.lyrics() == null ? List.of() : snapshot.lyrics());
     return exportSnapshot(administratorId);
   }

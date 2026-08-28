@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/music_controller.dart';
+import '../../domain/models/music_models.dart';
 import '../album/album_detail_screen.dart';
 import '../import/import_music_sheet.dart';
 import '../shared/widgets.dart';
@@ -43,6 +44,30 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ),
+        if (controller.recommendedPlaylists.isNotEmpty) ...[
+          const SliverToBoxAdapter(
+              child: SectionTitle(title: 'Recommended playlists')),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 210,
+              child: ListView.builder(
+                padding: const EdgeInsets.only(left: 20),
+                scrollDirection: Axis.horizontal,
+                itemCount: controller.recommendedPlaylists.length,
+                itemBuilder: (context, index) {
+                  final playlist = controller.recommendedPlaylists[index];
+                  return CollectionCard(
+                    title: playlist.name,
+                    subtitle: '${playlist.type} • ${playlist.subtype}',
+                    color: playlist.color,
+                    imageUrl: playlist.artworkUrl,
+                    onTap: () => _showRecommended(context, playlist),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -238,6 +263,38 @@ class HomeScreen extends StatelessWidget {
                 ]),
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
+    );
+  }
+
+  void _showRecommended(BuildContext context, RecommendedPlaylist playlist) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: Artwork(
+                color: playlist.color,
+                label: playlist.name,
+                imageUrl: playlist.artworkUrl,
+                size: 54),
+            title: Text(playlist.name,
+                style: const TextStyle(fontWeight: FontWeight.w900)),
+            subtitle: Text(
+                '${playlist.type} • ${playlist.subtype}\n${playlist.description}'),
+            isThreeLine: true,
+          ),
+          ...playlist.tracks.map((track) => TrackTile(
+                track: track,
+                onTap: () {
+                  context.read<MusicController>().play(track);
+                  Navigator.pop(sheetContext);
+                },
+                onMore: () => showTrackActions(context, track),
+              )),
+          const SizedBox(height: 16),
+        ]),
+      ),
     );
   }
 

@@ -82,6 +82,7 @@ class MusicController extends ChangeNotifier {
   HomeData? _home;
   List<Album> _albums = [];
   List<Playlist> _playlists = [];
+  List<RecommendedPlaylist> _recommendedPlaylists = [];
   List<ListeningRoom> publicRooms = [];
   List<Track> searchResults = [];
   ListeningRoom? room;
@@ -115,6 +116,7 @@ class MusicController extends ChangeNotifier {
   List<MusicCollection> get collections => _home?.collections ?? [];
   List<Album> get albums => _albums;
   List<Playlist> get playlists => _playlists;
+  List<RecommendedPlaylist> get recommendedPlaylists => _recommendedPlaylists;
   List<Track> get recentlyPlayed => _home?.recentlyPlayed ?? [];
   List<Track> get allTracks => [for (final album in _albums) ...album.tracks];
   List<Track> get favoriteTracks =>
@@ -158,9 +160,12 @@ class MusicController extends ChangeNotifier {
       final catalog = await Future.wait<dynamic>([
         _repository.getHome(),
         _repository.getAlbums(),
+        _orDefault(
+            _repository.getRecommendedPlaylists(), <RecommendedPlaylist>[]),
       ]);
       _home = catalog[0] as HomeData;
       _albums = catalog[1] as List<Album>;
+      _recommendedPlaylists = catalog[2] as List<RecommendedPlaylist>;
       loadError = null;
 
       final account = isAuthenticated
@@ -957,6 +962,21 @@ class MusicController extends ChangeNotifier {
         .map((playlist) => playlist.id == playlistId ? updated : playlist)
         .toList();
     notifyListeners();
+  }
+
+  Future<List<RecommendedPlaylist>> getAdminRecommendedPlaylists() =>
+      _repository.getRecommendedPlaylists(admin: true);
+
+  Future<RecommendedPlaylist> saveRecommendedPlaylist(
+      RecommendedPlaylist playlist) async {
+    final saved = await _repository.saveRecommendedPlaylist(playlist);
+    await load();
+    return saved;
+  }
+
+  Future<void> deleteRecommendedPlaylist(String id) async {
+    await _repository.deleteRecommendedPlaylist(id);
+    await load();
   }
 
   @override

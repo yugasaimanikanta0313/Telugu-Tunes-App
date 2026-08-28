@@ -15,12 +15,14 @@ class AuthenticationFilterTest {
   void guestCanReadCatalogLyricsAndRequestPlaybackTicket() {
     assertThat(filter.skips(request("GET", "/api/v1/tracks/t1/lyrics"))).isTrue();
     assertThat(filter.skips(request("GET", "/api/v1/audio/t1/ticket"))).isTrue();
+    assertThat(filter.skips(request("GET", "/api/v1/recommended-playlists"))).isTrue();
   }
 
   @Test
   void roomsAndPersonalPlaylistsRemainProtected() {
     assertThat(filter.skips(request("GET", "/api/v1/rooms"))).isFalse();
     assertThat(filter.skips(request("GET", "/api/v1/playlists"))).isFalse();
+    assertThat(filter.skips(request("GET", "/api/v1/recommended-playlists/admin"))).isFalse();
   }
 
   private HttpServletRequest request(String method, String path) {

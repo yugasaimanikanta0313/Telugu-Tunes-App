@@ -6,6 +6,7 @@ import '../../state/music_controller.dart';
 import '../../data/services/api_music_service.dart';
 import '../auth/sign_in_screen.dart';
 import '../admin/member_management_screen.dart';
+import '../admin/recommended_playlists_screen.dart';
 import '../import/import_music_sheet.dart';
 import '../shared/widgets.dart';
 
@@ -71,6 +72,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   MaterialPageRoute(
                       builder: (_) => const MemberManagementScreen()),
                 ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.recommend_outlined),
+                title: const Text('Manage recommended playlists'),
+                subtitle:
+                    const Text('Choose category, subtype and catalog songs'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const RecommendedPlaylistsScreen())),
               ),
               const Divider(height: 1),
               ListTile(

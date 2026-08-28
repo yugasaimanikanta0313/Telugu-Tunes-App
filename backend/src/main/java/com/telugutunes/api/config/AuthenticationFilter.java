@@ -27,6 +27,7 @@ public class AuthenticationFilter extends OncePerRequestFilter {
         "GET".equalsIgnoreCase(request.getMethod())
             && (path.startsWith("/api/v1/home")
                 || path.startsWith("/api/v1/albums")
+                || path.equals("/api/v1/recommended-playlists")
                 || path.startsWith("/api/v1/tracks/search")
                 || path.matches("/api/v1/tracks/[^/]+/lyrics")
                 || path.matches("/api/v1/audio/[^/]+/ticket"));

@@ -14,6 +14,11 @@ abstract class MusicApiService {
   Future<List<Track>> search(String query);
   Future<List<Album>> getAlbums();
   Future<List<Playlist>> getPlaylists();
+  Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
+      {bool admin = false});
+  Future<RecommendedPlaylist> saveRecommendedPlaylist(
+      RecommendedPlaylist playlist);
+  Future<void> deleteRecommendedPlaylist(String id);
   Future<List<Track>> getFavorites();
   Future<List<Track>> setFavorite(String trackId, bool favorite);
   Future<ListeningRoom?> getRoom();
@@ -155,6 +160,42 @@ class SpringBootMusicApiService implements MusicApiService {
   @override
   Future<List<Playlist>> getPlaylists() async =>
       (await _getList('/playlists')).map(_playlist).toList();
+
+  @override
+  Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
+          {bool admin = false}) async =>
+      (await _getList(admin
+              ? '/recommended-playlists/admin'
+              : '/recommended-playlists'))
+          .map(_recommendedPlaylist)
+          .toList();
+
+  @override
+  Future<RecommendedPlaylist> saveRecommendedPlaylist(
+      RecommendedPlaylist playlist) async {
+    final body = {
+      'name': playlist.name,
+      'description': playlist.description,
+      'type': playlist.type,
+      'subtype': playlist.subtype,
+      'color': playlist.color,
+      'artworkUrl': playlist.artworkUrl,
+      'trackIds': playlist.tracks.map((track) => track.id).toList(),
+      'active': playlist.active,
+    };
+    return _recommendedPlaylist(playlist.id.isEmpty
+        ? await _postMap('/recommended-playlists', body)
+        : await _putMap('/recommended-playlists/${playlist.id}', body));
+  }
+
+  @override
+  Future<void> deleteRecommendedPlaylist(String id) async {
+    final response = await _client.delete(
+        Uri.parse('${config.baseUrl}/recommended-playlists/$id'),
+        headers: _headers);
+    if (response.statusCode < 200 || response.statusCode >= 300)
+      throw StateError(_errorMessage(response));
+  }
 
   @override
   Future<List<Track>> getFavorites() async =>
@@ -685,6 +726,19 @@ class SpringBootMusicApiService implements MusicApiService {
         color: json['color'] as String,
         artworkUrl: json['artworkUrl'] as String? ?? '',
         tracks: _list(json['tracks']).map(_track).toList(),
+      );
+
+  RecommendedPlaylist _recommendedPlaylist(Map<String, dynamic> json) =>
+      RecommendedPlaylist(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        description: json['description'] as String? ?? '',
+        type: json['type'] as String? ?? 'Mood & Emotion',
+        subtype: json['subtype'] as String? ?? 'Calming',
+        color: json['color'] as String? ?? '7C4DFF',
+        artworkUrl: json['artworkUrl'] as String? ?? '',
+        tracks: _list(json['tracks']).map(_track).toList(),
+        active: json['active'] as bool? ?? true,
       );
 
   AdminMember _adminMember(Map<String, dynamic> json) => AdminMember(

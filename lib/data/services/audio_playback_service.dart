@@ -188,7 +188,9 @@ class AudioPlaybackService {
     final query = <String, String>{
       'v': track.audioVersion.isEmpty ? track.id : track.audioVersion,
     };
-    if (kIsWeb) {
+    // Browsers always need a query-string ticket. Guest Android clients need
+    // one too because they do not have an Authorization header.
+    if (kIsWeb || _authToken.isEmpty) {
       final response = await http.get(
         Uri.parse('$_apiBaseUrl/audio/${track.id}/ticket'),
         headers:
