@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -18,6 +19,7 @@ public class HttpLyricsifyPageFetcher implements LyricsifyPageFetcher {
   private final AppProperties.Lyricsify properties;
   private final HttpClient http;
 
+  @Autowired
   public HttpLyricsifyPageFetcher(AppProperties properties) {
     this(properties, HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(
