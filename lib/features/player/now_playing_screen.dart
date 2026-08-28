@@ -205,6 +205,18 @@ class NowPlayingScreen extends StatelessWidget {
                                   : null,
                               icon: const Icon(Icons.repeat_rounded),
                             ),
+                            IconButton(
+                              onPressed: () =>
+                                  showRecommendationVoteSheet(context, track),
+                              tooltip: 'Vote for a recommended playlist',
+                              color: controller.isAuthenticated &&
+                                      controller
+                                          .eligibleVotePlaylists(track)
+                                          .isNotEmpty
+                                  ? Theme.of(context).colorScheme.primary
+                                  : null,
+                              icon: const Icon(Icons.how_to_vote_outlined),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 22),
