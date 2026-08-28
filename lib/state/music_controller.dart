@@ -54,7 +54,7 @@ class MusicController extends ChangeNotifier {
       }),
       _audio.trackChangedStream.listen(_audioTrackChanged),
       _audio.completedStream.listen((_) {
-        _offerCompletedTrackVote();
+        _offerTrackVote(current);
         unawaited(_playNextRoomTrack());
       }),
     ];
@@ -408,6 +408,12 @@ class MusicController extends ChangeNotifier {
 
   void _audioTrackChanged(String trackId) {
     if (room != null) return;
+    final finishedTrack = current;
+    final finishedDuration = _duration;
+    final naturallyCompleted = finishedTrack != null &&
+        finishedDuration != null &&
+        finishedDuration.inMilliseconds > 0 &&
+        _position >= finishedDuration - const Duration(seconds: 2);
     Track? track;
     for (final item in allTracks) {
       if (item.id == trackId) {
@@ -416,6 +422,7 @@ class MusicController extends ChangeNotifier {
       }
     }
     if (track == null || current?.id == track.id) return;
+    if (naturallyCompleted) _offerTrackVote(finishedTrack);
     current = track;
     _position = Duration.zero;
     playerError = null;
@@ -1006,8 +1013,7 @@ class MusicController extends ChangeNotifier {
     if (approve) await load();
   }
 
-  void _offerCompletedTrackVote() {
-    final track = current;
+  void _offerTrackVote(Track? track) {
     if (!isAuthenticated || room != null || track == null ||
         eligibleVotePlaylists(track).isEmpty) return;
     votePromptTrack = track;
