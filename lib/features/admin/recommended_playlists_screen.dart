@@ -70,8 +70,23 @@ class _RecommendedPlaylistsScreenState
     final name = TextEditingController(text: existing?.name ?? '');
     final description =
         TextEditingController(text: existing?.description ?? '');
-    var type = existing?.type ?? recommendedPlaylistSubtypes.keys.first;
-    var subtype = existing?.subtype ?? recommendedPlaylistSubtypes[type]!.first;
+    const customChoice = 'Custom…';
+    final initialType =
+        existing?.type ?? recommendedPlaylistSubtypes.keys.first;
+    var typeChoice = recommendedPlaylistSubtypes.containsKey(initialType)
+        ? initialType
+        : customChoice;
+    final customType = TextEditingController(
+        text: typeChoice == customChoice ? initialType : '');
+    final initialSubtypes =
+        recommendedPlaylistSubtypes[initialType] ?? const [];
+    final initialSubtype = existing?.subtype ??
+        (initialSubtypes.isEmpty ? '' : initialSubtypes.first);
+    var subtypeChoice = initialSubtypes.contains(initialSubtype)
+        ? initialSubtype
+        : customChoice;
+    final customSubtype = TextEditingController(
+        text: subtypeChoice == customChoice ? initialSubtype : '');
     var active = existing?.active ?? true;
     var catalogQuery = '';
     final selected = <String>{
@@ -99,33 +114,60 @@ class _RecommendedPlaylistsScreenState
                                 decoration: const InputDecoration(
                                     labelText: 'Details')),
                             DropdownButtonFormField<String>(
-                                value: type,
+                                initialValue: typeChoice,
                                 decoration:
                                     const InputDecoration(labelText: 'Type'),
-                                items: recommendedPlaylistSubtypes.keys
+                                items: [
+                                  ...recommendedPlaylistSubtypes.keys,
+                                  customChoice
+                                ]
                                     .map((v) => DropdownMenuItem(
                                         value: v, child: Text(v)))
                                     .toList(),
                                 onChanged: (v) {
-                                  if (v != null)
+                                  if (v != null) {
                                     setDialogState(() {
-                                      type = v;
-                                      subtype =
-                                          recommendedPlaylistSubtypes[v]!.first;
+                                      typeChoice = v;
+                                      final choices =
+                                          recommendedPlaylistSubtypes[v];
+                                      subtypeChoice =
+                                          choices?.first ?? customChoice;
                                     });
+                                  }
                                 }),
+                            if (typeChoice == customChoice)
+                              TextField(
+                                controller: customType,
+                                decoration: const InputDecoration(
+                                  labelText: 'Preferred type name',
+                                  hintText: 'e.g. Festival Specials',
+                                ),
+                              ),
                             DropdownButtonFormField<String>(
-                                value: subtype,
+                                key: ValueKey(typeChoice),
+                                initialValue: subtypeChoice,
                                 decoration:
                                     const InputDecoration(labelText: 'Subtype'),
-                                items: recommendedPlaylistSubtypes[type]!
+                                items: [
+                                  ...?recommendedPlaylistSubtypes[typeChoice],
+                                  customChoice
+                                ]
                                     .map((v) => DropdownMenuItem(
                                         value: v, child: Text(v)))
                                     .toList(),
                                 onChanged: (v) {
-                                  if (v != null)
-                                    setDialogState(() => subtype = v);
+                                  if (v != null) {
+                                    setDialogState(() => subtypeChoice = v);
+                                  }
                                 }),
+                            if (subtypeChoice == customChoice)
+                              TextField(
+                                controller: customSubtype,
+                                decoration: const InputDecoration(
+                                  labelText: 'Preferred subtype name',
+                                  hintText: 'e.g. Sankranti Celebration',
+                                ),
+                              ),
                             SwitchListTile(
                                 value: active,
                                 onChanged: (v) =>
@@ -192,6 +234,13 @@ class _RecommendedPlaylistsScreenState
                     FilledButton(
                         onPressed: () async {
                           if (name.text.trim().isEmpty) return;
+                          final type = typeChoice == customChoice
+                              ? customType.text.trim()
+                              : typeChoice;
+                          final subtype = subtypeChoice == customChoice
+                              ? customSubtype.text.trim()
+                              : subtypeChoice;
+                          if (type.isEmpty || subtype.isEmpty) return;
                           await music.saveRecommendedPlaylist(
                               RecommendedPlaylist(
                                   id: existing?.id ?? '',
@@ -213,6 +262,8 @@ class _RecommendedPlaylistsScreenState
                 )));
     name.dispose();
     description.dispose();
+    customType.dispose();
+    customSubtype.dispose();
     if (saved == true) await _load();
   }
 }
