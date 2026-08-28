@@ -73,6 +73,7 @@ class _RecommendedPlaylistsScreenState
     var type = existing?.type ?? recommendedPlaylistSubtypes.keys.first;
     var subtype = existing?.subtype ?? recommendedPlaylistSubtypes[type]!.first;
     var active = existing?.active ?? true;
+    var catalogQuery = '';
     final selected = <String>{
       if (existing != null) ...existing.tracks.map((track) => track.id),
     };
@@ -131,6 +132,16 @@ class _RecommendedPlaylistsScreenState
                                     setDialogState(() => active = v),
                                 title: const Text('Visible to listeners')),
                             const Divider(),
+                            TextField(
+                              decoration: const InputDecoration(
+                                labelText: 'Search catalog',
+                                prefixIcon: Icon(Icons.search_rounded),
+                                hintText:
+                                    'Song, singer, album, director or genre',
+                              ),
+                              onChanged: (value) => setDialogState(() =>
+                                  catalogQuery = value.trim().toLowerCase()),
+                            ),
                             Row(children: [
                               const Expanded(
                                   child: Text('Choose songs from catalog',
@@ -142,7 +153,17 @@ class _RecommendedPlaylistsScreenState
                                   icon: const Icon(Icons.upload_file),
                                   label: const Text('Add from device'))
                             ]),
-                            ...music.allTracks.map((track) => CheckboxListTile(
+                            ...music.allTracks.where((track) {
+                              if (catalogQuery.isEmpty) return true;
+                              return [
+                                track.title,
+                                track.artist,
+                                track.album,
+                                track.singers,
+                                track.musicDirector,
+                                track.genre,
+                              ].join(' ').toLowerCase().contains(catalogQuery);
+                            }).map((track) => CheckboxListTile(
                                 dense: true,
                                 value: selected.contains(track.id),
                                 title: Text(track.title),
