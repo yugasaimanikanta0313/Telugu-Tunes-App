@@ -14,6 +14,8 @@ abstract class MusicApiService {
   Future<List<Track>> search(String query);
   Future<List<Album>> getAlbums();
   Future<List<Playlist>> getPlaylists();
+  Future<List<Track>> getFavorites();
+  Future<List<Track>> setFavorite(String trackId, bool favorite);
   Future<ListeningRoom?> getRoom();
   Future<List<ListeningRoom>> getPublicRooms();
   Future<ApiSession> register({
@@ -153,6 +155,22 @@ class SpringBootMusicApiService implements MusicApiService {
   @override
   Future<List<Playlist>> getPlaylists() async =>
       (await _getList('/playlists')).map(_playlist).toList();
+
+  @override
+  Future<List<Track>> getFavorites() async =>
+      (await _getList('/favorites')).map(_track).toList();
+
+  @override
+  Future<List<Track>> setFavorite(String trackId, bool favorite) async {
+    final uri = Uri.parse('${config.baseUrl}/favorites/$trackId');
+    final response = favorite
+        ? await _client.put(uri, headers: _headers)
+        : await _client.delete(uri, headers: _headers);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(_errorMessage(response));
+    }
+    return _list(jsonDecode(response.body)).map(_track).toList();
+  }
 
   @override
   Future<ListeningRoom?> getRoom() async {

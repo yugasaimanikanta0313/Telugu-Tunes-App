@@ -12,6 +12,7 @@ public class AppProperties {
   private final Groq groq = new Groq();
   private final YouTube youtube = new YouTube();
   private final Access access = new Access();
+  private final Lyrics lyrics = new Lyrics();
 
   public Cors getCors() {
     return cors;
@@ -35,6 +36,35 @@ public class AppProperties {
 
   public Access getAccess() {
     return access;
+  }
+
+  public Lyrics getLyrics() { return lyrics; }
+
+  public static class Lyrics {
+    private final Provider lrclib = new Provider();
+    private final Lyricsify lyricsify = new Lyricsify();
+
+    public Provider getLrclib() { return lrclib; }
+    public Lyricsify getLyricsify() { return lyricsify; }
+  }
+
+  public static class Provider {
+    private boolean enabled = true;
+    public boolean isEnabled() { return enabled; }
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
+  }
+
+  public static class Lyricsify extends Provider {
+    private double minimumConfidence = 0.75;
+    private int requestTimeoutSeconds = 10;
+    private int retryAfterHours = 12;
+
+    public double getMinimumConfidence() { return minimumConfidence; }
+    public void setMinimumConfidence(double value) { minimumConfidence = value; }
+    public int getRequestTimeoutSeconds() { return requestTimeoutSeconds; }
+    public void setRequestTimeoutSeconds(int value) { requestTimeoutSeconds = value; }
+    public int getRetryAfterHours() { return retryAfterHours; }
+    public void setRetryAfterHours(int value) { retryAfterHours = value; }
   }
 
   public static class Cors {

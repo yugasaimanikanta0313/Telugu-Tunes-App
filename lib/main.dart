@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'data/repositories/music_repository.dart';
 import 'data/services/api_music_service.dart';
 import 'data/services/auth_session_service.dart';
-import 'features/auth/sign_in_screen.dart';
 import 'features/shared/server_wake_gate.dart';
 import 'features/shell/app_shell.dart';
 import 'state/music_controller.dart';
@@ -70,29 +69,25 @@ class _TeluguTunesAppState extends State<TeluguTunesApp> {
       );
     }
 
-    if (_session == null) {
-      return _buildMaterialApp(
-        ServerWakeGate(
-          apiBaseUrl: BackendConfig.development.baseUrl,
-          child: SignInScreen(onAuthenticated: _authenticated),
-        ),
-      );
-    }
-
+    final config = _session?.config ?? BackendConfig.development;
     return ChangeNotifierProvider(
+      key: ValueKey(config.authToken.isEmpty ? 'guest' : config.authToken),
       create: (_) => MusicController(
-        SpringBootMusicRepository(SpringBootMusicApiService(_session!.config)),
+        SpringBootMusicRepository(SpringBootMusicApiService(config)),
         remoteMode: true,
-        apiBaseUrl: _session!.config.baseUrl,
-        authToken: _session!.config.authToken,
-        memberName: _session!.member.displayName,
-        memberId: _session!.member.id,
-        isAdmin: _session!.member.isAdmin,
+        apiBaseUrl: config.baseUrl,
+        authToken: config.authToken,
+        memberName: _session?.member.displayName ?? 'Guest listener',
+        memberId: _session?.member.id ?? '',
+        isAdmin: _session?.member.isAdmin ?? false,
       )..load(),
       child: _MusicMaterialApp(
         home: ServerWakeGate(
-          apiBaseUrl: _session!.config.baseUrl,
-          child: AppShell(onSignOut: _signOut),
+          apiBaseUrl: config.baseUrl,
+          child: AppShell(
+            onSignOut: _session == null ? null : _signOut,
+            onSignIn: _session == null ? _authenticated : null,
+          ),
         ),
       ),
     );

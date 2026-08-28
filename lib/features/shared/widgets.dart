@@ -283,7 +283,9 @@ class TrackTile extends StatelessWidget {
             tooltip: controller.isFavorite(track)
                 ? 'Remove from favorites'
                 : 'Add to favorites',
-            onPressed: () => controller.toggleFavorite(track),
+            onPressed: controller.isAuthenticated
+                ? () => controller.toggleFavorite(track)
+                : null,
             icon: Icon(
                 controller.isFavorite(track)
                     ? Icons.favorite_rounded

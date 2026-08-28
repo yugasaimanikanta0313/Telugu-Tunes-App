@@ -13,7 +13,7 @@ A polished Flutter Android client for a private Telugu music circle. It contains
 - Gapless queued playback for uploaded private-storage audio, with background controls and real offline downloads
 - Artwork-derived app themes and bounded artwork/audio caching
 - Smart listen-together synchronization with WebSocket status and correction logs
-- Synced Telugu LRC lyrics with LRCLIB search fallback and administrator editing
+- Synced Telugu LRC lyrics with cache/manual-first lookup, LRCLIB then Lyricsify fallback, and administrator editing
 - Sleep timer plus administrator metadata backup and non-destructive restore
 - Add music flow with editable Gemini metadata suggestions before device files are uploaded
 - Settings and connection-status screen

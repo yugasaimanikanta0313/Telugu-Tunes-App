@@ -3,13 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/music_controller.dart';
+import '../../data/services/api_music_service.dart';
+import '../auth/sign_in_screen.dart';
 import '../admin/member_management_screen.dart';
 import '../import/import_music_sheet.dart';
 import '../shared/widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, this.onSignOut});
+  const SettingsScreen({super.key, this.onSignOut, this.onSignIn});
   final Future<void> Function()? onSignOut;
+  final ValueChanged<ApiSession>? onSignIn;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -32,20 +35,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 .headlineMedium
                 ?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(height: 18),
+        const SectionTitle(title: 'Account'),
         Card(
           child: ListTile(
-            leading: const CircleAvatar(child: Text('S')),
+            leading: CircleAvatar(
+                child: Icon(controller.isAuthenticated
+                    ? Icons.person_rounded
+                    : Icons.person_outline_rounded)),
             title: Text(controller.memberName),
-            subtitle: Text(controller.remoteMode
-                ? 'Private circle • API profile active'
-                : 'Local demo profile'),
+            subtitle: Text(controller.isAuthenticated
+                ? 'Account bound • playlists, favorites and rooms enabled'
+                : 'Guest mode • listening does not require an account'),
             trailing: TextButton(
-                onPressed: widget.onSignOut == null
-                    ? null
-                    : () async {
-                        await widget.onSignOut!();
-                      },
-                child: const Text('Sign out')),
+                onPressed: controller.isAuthenticated
+                    ? widget.onSignOut
+                    : widget.onSignIn == null
+                        ? null
+                        : () => _openSignIn(widget.onSignIn!),
+                child: Text(
+                    controller.isAuthenticated ? 'Sign out' : 'Bind account')),
           ),
         ),
         if (controller.isAdmin) ...[
@@ -130,12 +138,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SectionTitle(title: 'Your music'),
         Card(
           child: Column(children: [
-            ListTile(
-                leading: const Icon(Icons.add_circle_outline_rounded),
-                title: const Text('Add or import music'),
-                subtitle: const Text('Files, folders, Drive or metadata links'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => showImportMusicSheet(context)),
+            if (controller.isAdmin)
+              ListTile(
+                  leading: const Icon(Icons.add_circle_outline_rounded),
+                  title: const Text('Add or import music'),
+                  subtitle:
+                      const Text('Files, folders, Drive or metadata links'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => showImportMusicSheet(context)),
             const Divider(height: 1),
             ListTile(
                 leading: const Icon(Icons.storage_rounded),
@@ -201,6 +211,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style:
                 Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4)),
       ],
+    );
+  }
+
+  Future<void> _openSignIn(ValueChanged<ApiSession> onSignIn) async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SignInScreen(
+          onAuthenticated: (session) {
+            Navigator.pop(context);
+            onSignIn(session);
+          },
+        ),
+      ),
     );
   }
 

@@ -27,7 +27,9 @@ public class AuthenticationFilter extends OncePerRequestFilter {
         "GET".equalsIgnoreCase(request.getMethod())
             && (path.startsWith("/api/v1/home")
                 || path.startsWith("/api/v1/albums")
-                || path.startsWith("/api/v1/tracks/search"));
+                || path.startsWith("/api/v1/tracks/search")
+                || path.matches("/api/v1/tracks/[^/]+/lyrics")
+                || path.matches("/api/v1/audio/[^/]+/ticket"));
     var ticketedAudioRead =
         "GET".equalsIgnoreCase(request.getMethod())
             && path.startsWith("/api/v1/audio/")

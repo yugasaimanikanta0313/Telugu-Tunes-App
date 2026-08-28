@@ -34,10 +34,11 @@ class HomeScreen extends StatelessWidget {
                       Text('Your private Telugu music space',
                           style: Theme.of(context).textTheme.bodyMedium),
                     ])),
-                IconButton.filledTonal(
-                    onPressed: () => showImportMusicSheet(context),
-                    tooltip: 'Add music',
-                    icon: const Icon(Icons.add_rounded)),
+                if (controller.isAdmin)
+                  IconButton.filledTonal(
+                      onPressed: () => showImportMusicSheet(context),
+                      tooltip: 'Add music',
+                      icon: const Icon(Icons.add_rounded)),
               ],
             ),
           ),
@@ -47,7 +48,9 @@ class HomeScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              onTap: () => _showAssistant(context),
+              onTap: controller.isAuthenticated
+                  ? () => _showAssistant(context)
+                  : null,
               child: Ink(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -149,11 +152,16 @@ class HomeScreen extends StatelessWidget {
           SliverToBoxAdapter(
             child: EmptyState(
               icon: Icons.library_music_outlined,
-              title: 'Your music space is ready',
-              body:
-                  'Add an audio file or a music link to begin building your private library.',
-              action: 'Add music',
-              onAction: () => showImportMusicSheet(context),
+              title: controller.isAdmin
+                  ? 'Your music space is ready'
+                  : 'No songs are available yet',
+              body: controller.isAdmin
+                  ? 'Add an audio file or a music link to begin building your private library.'
+                  : 'An administrator can add songs to the shared catalog.',
+              action: controller.isAdmin ? 'Add music' : null,
+              onAction: controller.isAdmin
+                  ? () => showImportMusicSheet(context)
+                  : null,
             ),
           ),
         ...controller.collections

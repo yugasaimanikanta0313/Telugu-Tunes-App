@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/music_controller.dart';
+import '../../data/services/api_music_service.dart';
+import '../auth/sign_in_screen.dart';
 import '../home/home_screen.dart';
 import '../import/import_music_sheet.dart';
 import '../library/library_screen.dart';
@@ -12,9 +14,10 @@ import '../settings/settings_screen.dart';
 import '../shared/widgets.dart';
 
 class AppShell extends StatelessWidget {
-  const AppShell({super.key, this.onSignOut});
+  const AppShell({super.key, this.onSignOut, this.onSignIn});
 
   final Future<void> Function()? onSignOut;
+  final ValueChanged<ApiSession>? onSignIn;
 
   static const _primaryPages = [
     HomeScreen(),
@@ -35,8 +38,17 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = context.watch<MusicController>();
     final pages = [
-      ..._primaryPages,
-      SettingsScreen(onSignOut: onSignOut),
+      _primaryPages[0],
+      _primaryPages[1],
+      controller.isAuthenticated
+          ? _primaryPages[2]
+          : _SignInRequiredScreen(
+              feature: 'playlists and favorites', onSignIn: onSignIn),
+      controller.isAuthenticated
+          ? _primaryPages[3]
+          : _SignInRequiredScreen(
+              feature: 'listening rooms', onSignIn: onSignIn),
+      SettingsScreen(onSignOut: onSignOut, onSignIn: onSignIn),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -70,7 +82,10 @@ class AppShell extends StatelessWidget {
                       leading: Padding(
                         padding: const EdgeInsets.only(top: 16, bottom: 16),
                         child: IconButton.filled(
-                            onPressed: () => showImportMusicSheet(context),
+                            onPressed:
+                                controller.isAuthenticated && controller.isAdmin
+                                    ? () => showImportMusicSheet(context)
+                                    : null,
                             tooltip: 'Add music',
                             icon: const Icon(Icons.add_rounded)),
                       ),
@@ -102,6 +117,61 @@ class AppShell extends StatelessWidget {
       },
     );
   }
+}
+
+class _SignInRequiredScreen extends StatelessWidget {
+  const _SignInRequiredScreen({required this.feature, this.onSignIn});
+  final String feature;
+  final ValueChanged<ApiSession>? onSignIn;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.lock_person_outlined, size: 48),
+                const SizedBox(height: 16),
+                Text('Sign in for $feature',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        )),
+                const SizedBox(height: 8),
+                const Text(
+                  'Listening to Telugu Tunes is free without an account. Sign in only when you want personal or social features.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: onSignIn == null
+                      ? null
+                      : () => _openSignIn(context, onSignIn!),
+                  icon: const Icon(Icons.login_rounded),
+                  label: const Text('Sign in or create account'),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      );
+}
+
+Future<void> _openSignIn(
+    BuildContext context, ValueChanged<ApiSession> onSignIn) async {
+  await Navigator.push<void>(
+    context,
+    MaterialPageRoute(
+      builder: (_) => SignInScreen(
+        onAuthenticated: (session) {
+          Navigator.pop(context);
+          onSignIn(session);
+        },
+      ),
+    ),
+  );
 }
 
 class _MiniPlayer extends StatelessWidget {

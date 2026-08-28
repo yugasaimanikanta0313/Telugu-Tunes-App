@@ -11,6 +11,8 @@ abstract class MusicRepository {
   Future<List<Track>> search(String query);
   Future<List<Album>> getAlbums();
   Future<List<Playlist>> getPlaylists();
+  Future<List<Track>> getFavorites();
+  Future<List<Track>> setFavorite(String trackId, bool favorite);
   Future<ListeningRoom?> getRoom();
   Future<List<ListeningRoom>> getPublicRooms();
   Future<Playlist> createPlaylist(String name);
@@ -82,6 +84,11 @@ class SpringBootMusicRepository implements MusicRepository {
   Future<List<Album>> getAlbums() => _api.getAlbums();
   @override
   Future<List<Playlist>> getPlaylists() => _api.getPlaylists();
+  @override
+  Future<List<Track>> getFavorites() => _api.getFavorites();
+  @override
+  Future<List<Track>> setFavorite(String trackId, bool favorite) =>
+      _api.setFavorite(trackId, favorite);
   @override
   Future<ListeningRoom?> getRoom() => _api.getRoom();
   @override
@@ -205,6 +212,7 @@ class SpringBootMusicRepository implements MusicRepository {
 }
 
 class MockMusicRepository implements MusicRepository {
+  final Set<String> _favoriteIds = {'t1', 't3'};
   static const _tracks = <Track>[
     Track(
         id: 't1',
@@ -360,6 +368,16 @@ class MockMusicRepository implements MusicRepository {
             color: 'FF7043',
             tracks: [_tracks[5], _tracks[3], _tracks[1]]),
       ];
+
+  @override
+  Future<List<Track>> getFavorites() async =>
+      _tracks.where((track) => _favoriteIds.contains(track.id)).toList();
+
+  @override
+  Future<List<Track>> setFavorite(String trackId, bool favorite) async {
+    favorite ? _favoriteIds.add(trackId) : _favoriteIds.remove(trackId);
+    return getFavorites();
+  }
 
   @override
   Future<ListeningRoom> getRoom() async => ListeningRoom(

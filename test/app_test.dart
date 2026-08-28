@@ -31,6 +31,7 @@ void main() {
         create: (_) => MusicController(
           MockMusicRepository(),
           memberId: 'Srinu',
+          authToken: 'test-token',
         )..load(),
         child: const MaterialApp(home: AppShell()),
       ),
@@ -55,5 +56,24 @@ void main() {
 
     expect(find.text('Start your own room'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('guest can browse but rooms require account binding',
+      (tester) async {
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => MusicController(MockMusicRepository())..load(),
+        child: const MaterialApp(home: AppShell()),
+      ),
+    );
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.text('Recently played'), findsOneWidget);
+    tester.element(find.byType(AppShell)).read<MusicController>().setTab(3);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sign in for listening rooms'), findsOneWidget);
   });
 }

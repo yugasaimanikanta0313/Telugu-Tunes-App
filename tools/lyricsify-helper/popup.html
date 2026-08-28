@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Telugu Tunes Lyrics Helper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>Telugu Tunes</h1>
+    <p class="hint">Open a Lyricsify song page, extract its LRC, select the exact Telugu Tunes song, then review and save.</p>
+
+    <section>
+      <h2>1. Administrator account</h2>
+      <label>Backend URL<input id="backend" value="http://129.225.82.162:8080/api/v1"></label>
+      <div id="signedOut">
+        <label>Email<input id="email" type="email" autocomplete="username"></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password"></label>
+        <button id="login">Sign in</button>
+      </div>
+      <div id="signedIn" hidden>
+        <span id="account"></span><button id="logout" class="secondary">Sign out</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Extract and select track</h2>
+      <button id="extract">Extract LRC from this page</button>
+      <label>Search Telugu Tunes<input id="query" placeholder="Title, artist, singer, album, director or genre"></label>
+      <button id="search" class="secondary">Search catalog</button>
+      <label>Exact destination song
+        <select id="tracks"><option value="">Search and choose a song</option></select>
+      </label>
+    </section>
+
+    <section>
+      <h2>3. Review</h2>
+      <label>Synced LRC<textarea id="lrc" rows="10" placeholder="[00:12.30]Line one"></textarea></label>
+      <button id="save">Save to selected song</button>
+    </section>
+    <p id="status" role="status"></p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,158 +1,96 @@
 package com.telugutunes.api.service;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 import com.telugutunes.api.api.dto.LyricsResponse;
 import com.telugutunes.api.api.dto.UpdateLyricsRequest;
+import com.telugutunes.api.config.AppProperties;
 import com.telugutunes.api.domain.LyricsDocument;
 import com.telugutunes.api.repository.LyricsRepository;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
+import com.telugutunes.api.service.lyrics.LrcValidator;
+import com.telugutunes.api.service.lyrics.LyricsProvider;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class LyricsService {
-  private static final String LRCLIB = "https://lrclib.net/api/get";
+  private static final Logger log = LoggerFactory.getLogger(LyricsService.class);
   private final LyricsRepository lyrics;
   private final CatalogService catalog;
   private final AuthService auth;
-  private final ObjectMapper json;
-  private final HttpClient http = HttpClient.newBuilder()
-      .connectTimeout(Duration.ofSeconds(5))
-      .build();
+  private final List<LyricsProvider> providers;
+  private final AppProperties properties;
 
   public LyricsService(
-      LyricsRepository lyrics, CatalogService catalog, AuthService auth, ObjectMapper json) {
+      LyricsRepository lyrics,
+      CatalogService catalog,
+      AuthService auth,
+      List<LyricsProvider> providers,
+      AppProperties properties) {
     this.lyrics = lyrics;
     this.catalog = catalog;
     this.auth = auth;
-    this.json = json;
+    this.providers = providers;
+    this.properties = properties;
   }
 
   public LyricsResponse get(String trackId) {
     var cached = lyrics.findById(trackId);
-    if (cached.isPresent()
-        && !("unavailable".equals(cached.get().source())
-            && cached.get().updatedAt().isBefore(Instant.now().minus(Duration.ofHours(6))))) {
-      return response(cached.get());
-    }
-    return response(importFromLrclib(trackId, "system"));
+    if (cached.isPresent() && isReusable(cached.get())) return response(cached.get());
+    return response(resolve(trackId, "system"));
   }
 
   public LyricsResponse refresh(String memberId, String trackId) {
     auth.requireAdministrator(memberId);
+    var cached = lyrics.findById(trackId);
+    if (cached.isPresent() && "manual".equals(cached.get().source())) return response(cached.get());
     lyrics.deleteById(trackId);
-    return response(importFromLrclib(trackId, memberId));
+    return response(resolve(trackId, memberId));
   }
 
   public LyricsResponse update(String memberId, String trackId, UpdateLyricsRequest request) {
     auth.requireAdministrator(memberId);
     catalog.trackDocument(trackId);
     var document = new LyricsDocument(
-        trackId,
-        blankDefault(request.language(), "te"),
-        "manual",
-        request.plainLyrics().trim(),
-        request.syncedLyrics().trim(),
-        memberId,
-        Instant.now());
+        trackId, blankDefault(request.language(), "te"), "manual",
+        request.plainLyrics().trim(), request.syncedLyrics().trim(),
+        null, 1.0, memberId, Instant.now());
     return response(lyrics.save(document));
   }
 
-  private LyricsDocument importFromLrclib(String trackId, String updatedBy) {
+  private LyricsDocument resolve(String trackId, String updatedBy) {
     var track = catalog.trackDocument(trackId);
-    var now = Instant.now();
-    try {
-      var exactUri = URI.create(LRCLIB
-          + "?track_name=" + encode(track.title())
-          + "&artist_name=" + encode(track.artist())
-          + "&album_name=" + encode(track.album())
-          + "&duration=" + Math.max(0, track.durationSeconds()));
-      JsonNode match = requestJson(exactUri);
-      var source = "lrclib-exact";
-      if (match == null) {
-        // Imported albums often contain placeholders such as "Imported music".
-        // Search is deliberately used only after the exact signature misses.
-        Thread.sleep(300);
-        var searchUri = URI.create("https://lrclib.net/api/search"
-            + "?track_name=" + encode(track.title())
-            + "&artist_name=" + encode(track.artist()));
-        match = bestSearchResult(requestJson(searchUri), track.title(), track.artist(), track.durationSeconds());
-        source = "lrclib-search";
+    for (var provider : providers) {
+      log.info("Trying lyrics provider={} trackId={}", provider.name(), trackId);
+      var match = provider.find(track);
+      if (match.isPresent() && LrcValidator.isSynced(match.get().syncedLyrics())) {
+        var found = match.get();
+        log.info("Lyrics accepted provider={} trackId={} confidence={}",
+            provider.name(), trackId, found.confidence());
+        return lyrics.save(new LyricsDocument(
+            trackId, "te", found.source(),
+            blankDefault(found.plainLyrics(), LrcValidator.plainText(found.syncedLyrics())),
+            found.syncedLyrics().trim(), found.sourceUrl(), found.confidence(),
+            updatedBy, Instant.now()));
       }
-      if (match == null) {
-        Thread.sleep(300);
-        var broadUri = URI.create("https://lrclib.net/api/search?q="
-            + encode(track.title() + " " + track.artist()));
-        match = bestSearchResult(requestJson(broadUri), track.title(), track.artist(), track.durationSeconds());
-        source = "lrclib-search";
-      }
-      if (match != null) {
-        var plain = match.path("plainLyrics").asText("").trim();
-        var synced = match.path("syncedLyrics").asText("").trim();
-        if (!plain.isBlank() || !synced.isBlank()) {
-          return lyrics.save(new LyricsDocument(
-              trackId, "te", source, plain, synced, updatedBy, now));
-        }
-      }
-    } catch (Exception ignored) {
-      // An empty cached result keeps playback independent from the community API.
+      log.info("Lyrics provider miss provider={} trackId={}", provider.name(), trackId);
     }
+    log.info("Lyrics unavailable after all providers trackId={}", trackId);
     return lyrics.save(new LyricsDocument(
-        trackId, "te", "unavailable", "", "", updatedBy, now));
+        trackId, "te", "unavailable", "", "", null, 0.0, updatedBy, Instant.now()));
   }
 
-  private JsonNode requestJson(URI uri) throws Exception {
-    var request = HttpRequest.newBuilder(uri)
-        .timeout(Duration.ofSeconds(8))
-        .header("Accept", "application/json")
-        .header("User-Agent", "TeluguTunes/1.0 (https://github.com/yugasaimanikanta0313/Telugu-Tunes-App)")
-        .GET()
-        .build();
-    var result = http.send(request, HttpResponse.BodyHandlers.ofString());
-    return result.statusCode() >= 200 && result.statusCode() < 300
-        ? json.readTree(result.body())
-        : null;
-  }
-
-  private JsonNode bestSearchResult(JsonNode results, String title, String artist, int durationSeconds) {
-    if (results == null || !results.isArray() || results.isEmpty()) return null;
-    JsonNode best = null;
-    var bestScore = Integer.MIN_VALUE;
-    for (var candidate : results) {
-      var candidateTitle = normalize(candidate.path("trackName").asText(candidate.path("name").asText("")));
-      var candidateArtist = normalize(candidate.path("artistName").asText(""));
-      var wantedTitle = normalize(title);
-      var wantedArtist = normalize(artist);
-      var score = 0;
-      if (candidateTitle.equals(wantedTitle)) score += 100;
-      else if (candidateTitle.contains(wantedTitle) || wantedTitle.contains(candidateTitle)) score += 55;
-      if (candidateArtist.equals(wantedArtist)) score += 45;
-      else if (candidateArtist.contains(wantedArtist) || wantedArtist.contains(candidateArtist)) score += 20;
-      var durationDifference = Math.abs(candidate.path("duration").asInt(0) - durationSeconds);
-      if (durationDifference <= 2) score += 30;
-      else if (durationDifference <= 10) score += 10;
-      if (!candidate.path("syncedLyrics").asText("").isBlank()) score += 8;
-      if (score > bestScore) {
-        bestScore = score;
-        best = candidate;
-      }
+  private boolean isReusable(LyricsDocument document) {
+    if ("manual".equals(document.source())) return true;
+    if (!"unavailable".equals(document.source())) {
+      return LrcValidator.isSynced(document.syncedLyrics())
+          || !blankDefault(document.plainLyrics(), "").isBlank();
     }
-    return bestScore >= 55 ? best : null;
-  }
-
-  private String normalize(String value) {
-    return blankDefault(value, "").toLowerCase(java.util.Locale.ROOT)
-        .replaceAll("(?i)\\b(official|video|lyrical|song|full|telugu|audio|hd|4k)\\b", " ")
-        .replaceAll("[^\\p{L}\\p{N}]+", " ")
-        .trim()
-        .replaceAll("\\s+", " ");
+    var hours = Math.max(1, properties.getLyrics().getLyricsify().getRetryAfterHours());
+    return document.updatedAt() != null
+        && document.updatedAt().isAfter(Instant.now().minus(Duration.ofHours(hours)));
   }
 
   private LyricsResponse response(LyricsDocument value) {
@@ -160,10 +98,6 @@ public class LyricsService {
         value.trackId(), value.language(), value.source(),
         blankDefault(value.plainLyrics(), ""), blankDefault(value.syncedLyrics(), ""),
         value.updatedAt());
-  }
-
-  private String encode(String value) {
-    return URLEncoder.encode(blankDefault(value, ""), StandardCharsets.UTF_8);
   }
 
   private String blankDefault(String value, String fallback) {

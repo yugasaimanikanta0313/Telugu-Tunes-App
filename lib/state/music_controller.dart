@@ -131,6 +131,7 @@ class MusicController extends ChangeNotifier {
           ? Duration.zero
           : sleepEndsAt!.difference(DateTime.now());
   bool get canStream => _audio.isAvailable;
+  bool get isAuthenticated => authToken.isNotEmpty && memberId.isNotEmpty;
   double get progress {
     final duration = _duration;
     if (duration == null || duration.inMilliseconds <= 0) return 0;
@@ -152,19 +153,30 @@ class MusicController extends ChangeNotifier {
           ..clear()
           ..addAll(_offline.downloadedTrackIds);
       }
-      final values = await Future.wait<dynamic>([
+      // The public catalog is the core experience. Load it independently so a
+      // temporarily unavailable account feature cannot blank the whole app.
+      final catalog = await Future.wait<dynamic>([
         _repository.getHome(),
         _repository.getAlbums(),
-        _repository.getPlaylists(),
-        _repository.getRoom(),
-        _repository.getPublicRooms(),
       ]);
-      _home = values[0] as HomeData;
-      _albums = values[1] as List<Album>;
-      _playlists = values[2] as List<Playlist>;
-      room = values[3] as ListeningRoom?;
-      publicRooms = values[4] as List<ListeningRoom>;
+      _home = catalog[0] as HomeData;
+      _albums = catalog[1] as List<Album>;
       loadError = null;
+
+      final account = isAuthenticated
+          ? await Future.wait<dynamic>([
+              _orDefault(_repository.getPlaylists(), <Playlist>[]),
+              _orDefault<ListeningRoom?>(_repository.getRoom(), null),
+              _orDefault(_repository.getPublicRooms(), <ListeningRoom>[]),
+              _orDefault(_repository.getFavorites(), <Track>[]),
+            ])
+          : <dynamic>[<Playlist>[], null, <ListeningRoom>[], <Track>[]];
+      _playlists = account[0] as List<Playlist>;
+      room = account[1] as ListeningRoom?;
+      publicRooms = account[2] as List<ListeningRoom>;
+      favorites
+        ..clear()
+        ..addAll((account[3] as List<Track>).map((track) => track.id));
     } catch (error) {
       _home ??= const HomeData(
         collections: [],
@@ -182,6 +194,14 @@ class MusicController extends ChangeNotifier {
     _configurePublicRoomPolling();
     loading = false;
     notifyListeners();
+  }
+
+  Future<T> _orDefault<T>(Future<T> request, T fallback) async {
+    try {
+      return await request;
+    } catch (_) {
+      return fallback;
+    }
   }
 
   void setTab(int tab) {
@@ -318,10 +338,13 @@ class MusicController extends ChangeNotifier {
     unawaited(_publishRoomPlayback());
   }
 
-  void toggleFavorite(Track track) {
-    favorites.contains(track.id)
-        ? favorites.remove(track.id)
-        : favorites.add(track.id);
+  Future<void> toggleFavorite(Track track) async {
+    if (!isAuthenticated) return;
+    final updated =
+        await _repository.setFavorite(track.id, !favorites.contains(track.id));
+    favorites
+      ..clear()
+      ..addAll(updated.map((value) => value.id));
     notifyListeners();
   }
 

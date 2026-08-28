@@ -58,3 +58,11 @@ app:
   access:
     # Comma-separated operator emails. Override with APP_ADMIN_EMAILS when deploying elsewhere.
     admin-emails: ${APP_ADMIN_EMAILS:yugasaimanikanta@gmail.com}
+  lyrics:
+    lrclib:
+      enabled: ${LYRICS_LRCLIB_ENABLED:true}
+    lyricsify:
+      enabled: ${LYRICS_LYRICSIFY_ENABLED:true}
+      minimum-confidence: ${LYRICS_LYRICSIFY_MINIMUM_CONFIDENCE:0.75}
+      request-timeout-seconds: ${LYRICS_LYRICSIFY_TIMEOUT_SECONDS:10}
+      retry-after-hours: ${LYRICS_RETRY_AFTER_HOURS:12}

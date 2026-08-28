@@ -132,7 +132,9 @@ class NowPlayingScreen extends StatelessWidget {
                               ),
                             ),
                             IconButton(
-                              onPressed: () => controller.toggleFavorite(track),
+                              onPressed: controller.isAuthenticated
+                                  ? () => controller.toggleFavorite(track)
+                                  : null,
                               icon: Icon(
                                 controller.isFavorite(track)
                                     ? Icons.favorite_rounded
@@ -375,7 +377,7 @@ class _LyricsPanel extends StatelessWidget {
                       ? null
                       : () => controller.loadLyrics(track, force: true),
                   icon: const Icon(Icons.cloud_download_outlined, size: 18),
-                  label: const Text('Try LRCLIB'),
+                  label: const Text('Find synced lyrics'),
                 ),
                 TextButton.icon(
                   onPressed: () => _editLyrics(context),

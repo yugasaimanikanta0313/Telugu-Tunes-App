@@ -118,12 +118,57 @@ public class CatalogService {
     if (clean.isBlank()) {
       return tracks.findAll().stream().limit(40).map(TrackResponse::from).toList();
     }
-    return tracks
-        .findTop40ByTitleContainingIgnoreCaseOrArtistContainingIgnoreCaseOrAlbumContainingIgnoreCase(
-            clean, clean, clean)
-        .stream()
+    var terms = java.util.Arrays.stream(normalizeSearchText(clean).split("\\s+"))
+        .filter(term -> term.length() >= 2)
+        .toList();
+    if (terms.isEmpty()) {
+      return List.of();
+    }
+    return tracks.findAll().stream()
+        .filter(track -> {
+          var metadata = searchableMetadata(track);
+          return terms.stream().anyMatch(metadata::contains);
+        })
+        .sorted(Comparator
+            .comparingInt((TrackDocument track) -> searchRank(track, clean, terms))
+            .thenComparing(TrackDocument::title, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+        .limit(40)
         .map(TrackResponse::from)
         .toList();
+  }
+
+  private String searchableMetadata(TrackDocument track) {
+    return String.join(" ",
+        cleanOrDefault(track.title(), ""),
+        cleanOrDefault(track.artist(), ""),
+        cleanOrDefault(track.album(), ""),
+        cleanOrDefault(track.singers(), ""),
+        cleanOrDefault(track.musicDirector(), ""),
+        cleanOrDefault(track.genre(), ""),
+        cleanOrDefault(track.duration(), ""),
+        cleanOrDefault(track.mimeType(), ""))
+        .transform(CatalogService::normalizeSearchText);
+  }
+
+  private int searchRank(TrackDocument track, String query, List<String> terms) {
+    var needle = normalizeSearchText(query);
+    var title = normalizeSearchText(cleanOrDefault(track.title(), ""));
+    if (title.equals(needle)) return 0;
+    if (title.startsWith(needle)) return 1;
+    if (title.contains(needle)) return 2;
+    if (terms.stream().anyMatch(title::startsWith)) return 3;
+    if (terms.stream().anyMatch(title::contains)) return 4;
+
+    var metadata = searchableMetadata(track);
+    var matches = (int) terms.stream().filter(metadata::contains).count();
+    return 100 - matches;
+  }
+
+  private static String normalizeSearchText(String value) {
+    if (value == null) return "";
+    return value.toLowerCase(java.util.Locale.ROOT)
+        .replaceAll("[^\\p{L}\\p{N}]+", " ")
+        .trim();
   }
 
   public AlbumResponse album(String id) {
