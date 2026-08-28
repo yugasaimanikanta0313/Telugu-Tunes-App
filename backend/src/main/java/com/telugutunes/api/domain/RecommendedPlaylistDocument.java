@@ -16,7 +16,7 @@ public record RecommendedPlaylistDocument(
     String artworkUrl,
     List<String> trackIds,
     boolean active,
-    boolean scheduleEnabled,
+    Boolean scheduleEnabled,
     List<Integer> scheduleDays,
     String scheduleStart,
     String scheduleEnd,

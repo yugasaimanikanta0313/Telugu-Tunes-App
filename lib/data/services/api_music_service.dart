@@ -16,6 +16,7 @@ abstract class MusicApiService {
   Future<List<Playlist>> getPlaylists();
   Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
       {bool admin = false});
+  Future<FestivalGreeting?> getTodayFestivalGreeting();
   Future<RecommendedPlaylist> saveRecommendedPlaylist(
       RecommendedPlaylist playlist);
   Future<void> deleteRecommendedPlaylist(String id);
@@ -176,6 +177,19 @@ class SpringBootMusicApiService implements MusicApiService {
           .toList();
 
   @override
+  Future<FestivalGreeting?> getTodayFestivalGreeting() async {
+    final response = await _client.get(
+        Uri.parse('${config.baseUrl}/festival-greetings/today'),
+        headers: _headers);
+    if (response.statusCode == 204) return null;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(_errorMessage(response));
+    }
+    return _festivalGreeting(
+        Map<String, dynamic>.from(jsonDecode(response.body) as Map));
+  }
+
+  @override
   Future<RecommendedPlaylist> saveRecommendedPlaylist(
       RecommendedPlaylist playlist) async {
     final body = {
@@ -210,7 +224,8 @@ class SpringBootMusicApiService implements MusicApiService {
   Future<void> voteForRecommendation(
       String trackId, String playlistId, String reason) async {
     await _postEmpty('/recommendation-votes/tracks/$trackId', {
-      'recommendedPlaylistId': playlistId, 'reason': reason,
+      'recommendedPlaylistId': playlistId,
+      'reason': reason,
     });
   }
 
@@ -222,7 +237,8 @@ class SpringBootMusicApiService implements MusicApiService {
                 playlist: _recommendedPlaylist(
                     Map<String, dynamic>.from(json['playlist'] as Map)),
                 voteCount: (json['voteCount'] as num?)?.toInt() ?? 0,
-                reasons: _list(json['reasons']).map((v) => v.toString()).toList(),
+                reasons:
+                    _list(json['reasons']).map((v) => v.toString()).toList(),
               ))
           .toList();
 
@@ -786,11 +802,27 @@ class SpringBootMusicApiService implements MusicApiService {
         tracks: _list(json['tracks']).map(_track).toList(),
         active: json['active'] as bool? ?? true,
         scheduleEnabled: json['scheduleEnabled'] as bool? ?? false,
-        scheduleDays: _list(json['scheduleDays'])
-            .map((value) => (value as num).toInt())
+        scheduleDays: (json['scheduleDays'] is List
+                ? json['scheduleDays'] as List
+                : const <dynamic>[])
+            .whereType<num>()
+            .map((value) => value.toInt())
             .toList(),
         scheduleStart: json['scheduleStart'] as String? ?? '',
         scheduleEnd: json['scheduleEnd'] as String? ?? '',
+      );
+
+  FestivalGreeting _festivalGreeting(Map<String, dynamic> json) =>
+      FestivalGreeting(
+        id: json['id'] as String? ?? '',
+        date:
+            DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+        festival: json['festival'] as String? ?? '',
+        greeting: json['greeting'] as String? ?? '',
+        artworkUrl: json['artworkUrl'] as String? ?? '',
+        color: json['color'] as String? ?? 'E15184',
+        enabled: json['enabled'] as bool? ?? true,
+        builtIn: json['builtIn'] as bool? ?? false,
       );
 
   AdminMember _adminMember(Map<String, dynamic> json) => AdminMember(

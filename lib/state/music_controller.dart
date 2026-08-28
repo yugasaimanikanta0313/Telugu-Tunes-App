@@ -87,6 +87,7 @@ class MusicController extends ChangeNotifier {
   List<Album> _albums = [];
   List<Playlist> _playlists = [];
   List<RecommendedPlaylist> _recommendedPlaylists = [];
+  FestivalGreeting? festivalGreeting;
   List<ListeningRoom> publicRooms = [];
   List<Track> searchResults = [];
   ListeningRoom? room;
@@ -141,7 +142,8 @@ class MusicController extends ChangeNotifier {
   bool get isAuthenticated => authToken.isNotEmpty && memberId.isNotEmpty;
   List<RecommendedPlaylist> eligibleVotePlaylists(Track track) =>
       _recommendedPlaylists
-          .where((playlist) => playlist.active &&
+          .where((playlist) =>
+              playlist.active &&
               !playlist.tracks.any((item) => item.id == track.id))
           .toList();
   double get progress {
@@ -172,10 +174,13 @@ class MusicController extends ChangeNotifier {
         _repository.getAlbums(),
         _orDefault(
             _repository.getRecommendedPlaylists(), <RecommendedPlaylist>[]),
+        _orDefault<FestivalGreeting?>(
+            _repository.getTodayFestivalGreeting(), null),
       ]);
       _home = catalog[0] as HomeData;
       _albums = catalog[1] as List<Album>;
       _recommendedPlaylists = catalog[2] as List<RecommendedPlaylist>;
+      festivalGreeting = catalog[3] as FestivalGreeting?;
       loadError = null;
 
       final account = isAuthenticated
@@ -1014,7 +1019,9 @@ class MusicController extends ChangeNotifier {
   }
 
   void _offerTrackVote(Track? track) {
-    if (!isAuthenticated || room != null || track == null ||
+    if (!isAuthenticated ||
+        room != null ||
+        track == null ||
         eligibleVotePlaylists(track).isEmpty) return;
     votePromptTrack = track;
     _votePromptTimer?.cancel();

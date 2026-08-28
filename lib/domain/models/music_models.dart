@@ -382,6 +382,28 @@ class HomeData {
   final List<Track> recentlyPlayed;
 }
 
+class FestivalGreeting {
+  const FestivalGreeting({
+    required this.id,
+    required this.date,
+    required this.festival,
+    required this.greeting,
+    required this.color,
+    this.artworkUrl = '',
+    this.enabled = true,
+    this.builtIn = false,
+  });
+
+  final String id;
+  final DateTime date;
+  final String festival;
+  final String greeting;
+  final String artworkUrl;
+  final String color;
+  final bool enabled;
+  final bool builtIn;
+}
+
 class ImportRequest {
   const ImportRequest({required this.source, this.value = ''});
 

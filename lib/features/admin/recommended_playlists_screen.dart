@@ -17,6 +17,7 @@ class _RecommendedPlaylistsScreenState
     extends State<RecommendedPlaylistsScreen> {
   List<RecommendedPlaylist> items = const [];
   bool loading = true;
+  String? loadError;
   String playlistQuery = '';
   @override
   void initState() {
@@ -25,13 +26,26 @@ class _RecommendedPlaylistsScreenState
   }
 
   Future<void> _load() async {
-    final result =
-        await context.read<MusicController>().getAdminRecommendedPlaylists();
     if (mounted)
+      setState(() {
+        loading = true;
+        loadError = null;
+      });
+    try {
+      final result =
+          await context.read<MusicController>().getAdminRecommendedPlaylists();
+      if (!mounted) return;
       setState(() {
         items = result;
         loading = false;
       });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+        loadError = error.toString();
+      });
+    }
   }
 
   @override
@@ -43,44 +57,64 @@ class _RecommendedPlaylistsScreenState
             label: const Text('Create')),
         body: loading
             ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  const Text(
-                      'These playlists are curated by administrators and shown to every listener.'),
-                  const SizedBox(height: 12),
-                  TextField(
-                    decoration: const InputDecoration(
-                      labelText: 'Search existing playlists',
-                      hintText: 'Name, type or subtype',
-                      prefixIcon: Icon(Icons.search_rounded),
+            : loadError != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.cloud_off_rounded, size: 48),
+                        const SizedBox(height: 12),
+                        const Text(
+                            'Recommended playlists could not be loaded.'),
+                        const SizedBox(height: 8),
+                        Text(loadError!, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _load,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Try again'),
+                        ),
+                      ]),
                     ),
-                    onChanged: (value) => setState(
-                        () => playlistQuery = value.trim().toLowerCase()),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      const Text(
+                          'These playlists are curated by administrators and shown to every listener.'),
+                      const SizedBox(height: 12),
+                      TextField(
+                        decoration: const InputDecoration(
+                          labelText: 'Search existing playlists',
+                          hintText: 'Name, type or subtype',
+                          prefixIcon: Icon(Icons.search_rounded),
+                        ),
+                        onChanged: (value) => setState(
+                            () => playlistQuery = value.trim().toLowerCase()),
+                      ),
+                      const SizedBox(height: 12),
+                      ...items
+                          .where((item) =>
+                              playlistQuery.isEmpty ||
+                              '${item.name} ${item.type} ${item.subtype}'
+                                  .toLowerCase()
+                                  .contains(playlistQuery))
+                          .map((item) => Card(
+                                  child: ListTile(
+                                leading: Artwork(
+                                    color: item.color,
+                                    label: item.name,
+                                    imageUrl: item.artworkUrl,
+                                    size: 52),
+                                title: Text(item.name),
+                                subtitle: Text(
+                                    '${item.type} • ${item.subtype} • ${item.tracks.length} songs${item.active ? '' : ' • Hidden'}\n${item.scheduleLabel}'),
+                                isThreeLine: true,
+                                trailing: const Icon(Icons.edit_outlined),
+                                onTap: () => _edit(item),
+                              ))),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  ...items
-                      .where((item) =>
-                          playlistQuery.isEmpty ||
-                          '${item.name} ${item.type} ${item.subtype}'
-                              .toLowerCase()
-                              .contains(playlistQuery))
-                      .map((item) => Card(
-                              child: ListTile(
-                            leading: Artwork(
-                                color: item.color,
-                                label: item.name,
-                                imageUrl: item.artworkUrl,
-                                size: 52),
-                            title: Text(item.name),
-                            subtitle: Text(
-                                '${item.type} • ${item.subtype} • ${item.tracks.length} songs${item.active ? '' : ' • Hidden'}\n${item.scheduleLabel}'),
-                            isThreeLine: true,
-                            trailing: const Icon(Icons.edit_outlined),
-                            onTap: () => _edit(item),
-                          ))),
-                ],
-              ),
       );
 
   Future<void> _edit([RecommendedPlaylist? existing]) async {
@@ -207,27 +241,38 @@ class _RecommendedPlaylistsScreenState
                                       value: scheduleEnabled,
                                       onChanged: (value) => setDialogState(
                                           () => scheduleEnabled = value),
-                                      secondary: const Icon(Icons.auto_awesome_rounded),
-                                      title: const Text('Schedule this playlist'),
+                                      secondary: const Icon(
+                                          Icons.auto_awesome_rounded),
+                                      title:
+                                          const Text('Schedule this playlist'),
                                       subtitle: const Text(
                                           'Choose when this subtype should be highlighted.'),
                                     ),
                                     if (scheduleEnabled) ...[
                                       const Text('Days of the week',
-                                          style: TextStyle(fontWeight: FontWeight.bold)),
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold)),
                                       const SizedBox(height: 8),
                                       Wrap(
                                         spacing: 6,
                                         runSpacing: 6,
                                         children: List.generate(7, (index) {
                                           const labels = [
-                                            'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
+                                            'Mon',
+                                            'Tue',
+                                            'Wed',
+                                            'Thu',
+                                            'Fri',
+                                            'Sat',
+                                            'Sun'
                                           ];
                                           final day = index + 1;
                                           return FilterChip(
                                             label: Text(labels[index]),
-                                            selected: scheduleDays.contains(day),
-                                            onSelected: (selectedDay) => setDialogState(() {
+                                            selected:
+                                                scheduleDays.contains(day),
+                                            onSelected: (selectedDay) =>
+                                                setDialogState(() {
                                               selectedDay
                                                   ? scheduleDays.add(day)
                                                   : scheduleDays.remove(day);
@@ -237,37 +282,51 @@ class _RecommendedPlaylistsScreenState
                                       ),
                                       const SizedBox(height: 10),
                                       Row(children: [
-                                        Expanded(child: OutlinedButton.icon(
-                                          icon: const Icon(Icons.wb_sunny_outlined),
+                                        Expanded(
+                                            child: OutlinedButton.icon(
+                                          icon: const Icon(
+                                              Icons.wb_sunny_outlined),
                                           label: Text(scheduleStart.isEmpty
                                               ? 'Starts anytime'
                                               : 'From $scheduleStart'),
                                           onPressed: () async {
                                             final picked = await showTimePicker(
                                               context: dialogContext,
-                                              initialTime: _time(scheduleStart, const TimeOfDay(hour: 6, minute: 0)),
+                                              initialTime: _time(
+                                                  scheduleStart,
+                                                  const TimeOfDay(
+                                                      hour: 6, minute: 0)),
                                             );
-                                            if (picked != null) setDialogState(
-                                                () => scheduleStart = _clock(picked));
+                                            if (picked != null)
+                                              setDialogState(() =>
+                                                  scheduleStart =
+                                                      _clock(picked));
                                           },
                                         )),
                                         const SizedBox(width: 8),
-                                        Expanded(child: OutlinedButton.icon(
-                                          icon: const Icon(Icons.nights_stay_outlined),
+                                        Expanded(
+                                            child: OutlinedButton.icon(
+                                          icon: const Icon(
+                                              Icons.nights_stay_outlined),
                                           label: Text(scheduleEnd.isEmpty
                                               ? 'Ends anytime'
                                               : 'Until $scheduleEnd'),
                                           onPressed: () async {
                                             final picked = await showTimePicker(
                                               context: dialogContext,
-                                              initialTime: _time(scheduleEnd, const TimeOfDay(hour: 22, minute: 0)),
+                                              initialTime: _time(
+                                                  scheduleEnd,
+                                                  const TimeOfDay(
+                                                      hour: 22, minute: 0)),
                                             );
-                                            if (picked != null) setDialogState(
-                                                () => scheduleEnd = _clock(picked));
+                                            if (picked != null)
+                                              setDialogState(() =>
+                                                  scheduleEnd = _clock(picked));
                                           },
                                         )),
                                       ]),
-                                      if (scheduleStart.isNotEmpty || scheduleEnd.isNotEmpty)
+                                      if (scheduleStart.isNotEmpty ||
+                                          scheduleEnd.isNotEmpty)
                                         Align(
                                           alignment: Alignment.centerRight,
                                           child: TextButton(

@@ -27,12 +27,12 @@ class HomeScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                       Text(
-  'Namasthe!, ${controller.memberName}',
-  style: Theme.of(context)
-      .textTheme
-      .headlineSmall
-      ?.copyWith(fontWeight: FontWeight.w900),
-),
+                        'Namasthe!, ${controller.memberName}',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
                       const SizedBox(height: 3),
                       Text('Your private Telugu music space',
                           style: Theme.of(context).textTheme.bodyMedium),
@@ -46,6 +46,43 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ),
+        if (controller.festivalGreeting case final festival?)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  gradient: LinearGradient(colors: [
+                    colorFromHex(festival.color),
+                    colorFromHex(festival.color).withValues(alpha: .55),
+                  ]),
+                ),
+                child: Row(children: [
+                  const CircleAvatar(
+                    backgroundColor: Colors.white24,
+                    child: Icon(Icons.celebration_rounded, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(festival.festival,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 17)),
+                      const SizedBox(height: 3),
+                      Text(festival.greeting,
+                          style: const TextStyle(color: Colors.white)),
+                    ],
+                  )),
+                ]),
+              ),
+            ),
+          ),
         if (controller.recommendedPlaylists.isNotEmpty) ...[
           const SliverToBoxAdapter(
               child: SectionTitle(title: 'Recommended playlists')),

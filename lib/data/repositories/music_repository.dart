@@ -13,6 +13,7 @@ abstract class MusicRepository {
   Future<List<Playlist>> getPlaylists();
   Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
       {bool admin = false});
+  Future<FestivalGreeting?> getTodayFestivalGreeting();
   Future<RecommendedPlaylist> saveRecommendedPlaylist(
       RecommendedPlaylist playlist);
   Future<void> deleteRecommendedPlaylist(String id);
@@ -98,6 +99,9 @@ class SpringBootMusicRepository implements MusicRepository {
   Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
           {bool admin = false}) =>
       _api.getRecommendedPlaylists(admin: admin);
+  @override
+  Future<FestivalGreeting?> getTodayFestivalGreeting() =>
+      _api.getTodayFestivalGreeting();
   @override
   Future<RecommendedPlaylist> saveRecommendedPlaylist(
           RecommendedPlaylist playlist) =>
@@ -405,6 +409,9 @@ class MockMusicRepository implements MusicRepository {
   Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
           {bool admin = false}) async =>
       const [];
+
+  @override
+  Future<FestivalGreeting?> getTodayFestivalGreeting() async => null;
 
   @override
   Future<RecommendedPlaylist> saveRecommendedPlaylist(

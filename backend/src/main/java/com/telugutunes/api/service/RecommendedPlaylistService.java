@@ -70,7 +70,7 @@ public class RecommendedPlaylistService {
     var artwork = clean(value.artworkUrl());
     if (artwork.isBlank()) artwork = tracks.stream().map(t -> t.artworkUrl()).filter(v -> v != null && !v.isBlank()).findFirst().orElse("");
     return new RecommendedPlaylistResponse(value.id(), value.name(), clean(value.description()), value.type(), value.subtype(),
-        defaultValue(value.artworkColor(), "7C4DFF"), artwork, tracks, value.active(), value.scheduleEnabled(),
+        defaultValue(value.artworkColor(), "7C4DFF"), artwork, tracks, value.active(), Boolean.TRUE.equals(value.scheduleEnabled()),
         validDays(value.scheduleDays()), clean(value.scheduleStart()), clean(value.scheduleEnd()));
   }
 
@@ -91,7 +91,7 @@ public class RecommendedPlaylistService {
   }
 
   private boolean isScheduledNow(RecommendedPlaylistDocument value) {
-    if (!value.scheduleEnabled()) return true;
+    if (!Boolean.TRUE.equals(value.scheduleEnabled())) return true;
     var now = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata"));
     var days = validDays(value.scheduleDays());
     if (!days.isEmpty() && !days.contains(now.getDayOfWeek().getValue())) return false;
