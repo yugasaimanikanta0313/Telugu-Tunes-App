@@ -53,7 +53,10 @@ class MusicController extends ChangeNotifier {
         notifyListeners();
       }),
       _audio.trackChangedStream.listen(_audioTrackChanged),
-      _audio.completedStream.listen((_) => unawaited(_playNextRoomTrack())),
+      _audio.completedStream.listen((_) {
+        _offerCompletedTrackVote();
+        unawaited(_playNextRoomTrack());
+      }),
     ];
   }
 
@@ -79,6 +82,7 @@ class MusicController extends ChangeNotifier {
   ListeningRoom? _pendingRoomSync;
   Future<void>? _roomSyncWorker;
   Timer? _sleepTimer;
+  Timer? _votePromptTimer;
   HomeData? _home;
   List<Album> _albums = [];
   List<Playlist> _playlists = [];
@@ -106,6 +110,7 @@ class MusicController extends ChangeNotifier {
   RoomConnectionStatus roomConnectionStatus = RoomConnectionStatus.disconnected;
   int roomDriftMs = 0;
   TrackLyrics? currentLyrics;
+  Track? votePromptTrack;
   bool lyricsLoading = false;
   String? lyricsError;
   DateTime? sleepEndsAt;
@@ -134,6 +139,11 @@ class MusicController extends ChangeNotifier {
           : sleepEndsAt!.difference(DateTime.now());
   bool get canStream => _audio.isAvailable;
   bool get isAuthenticated => authToken.isNotEmpty && memberId.isNotEmpty;
+  List<RecommendedPlaylist> eligibleVotePlaylists(Track track) =>
+      _recommendedPlaylists
+          .where((playlist) => playlist.active &&
+              !playlist.tracks.any((item) => item.id == track.id))
+          .toList();
   double get progress {
     final duration = _duration;
     if (duration == null || duration.inMilliseconds <= 0) return 0;
@@ -979,9 +989,44 @@ class MusicController extends ChangeNotifier {
     await load();
   }
 
+  Future<void> voteForRecommendation(
+      Track track, RecommendedPlaylist playlist, String reason) async {
+    if (!isAuthenticated) throw StateError('Sign in to vote for playlists.');
+    await _repository.voteForRecommendation(track.id, playlist.id, reason);
+    dismissVotePrompt();
+  }
+
+  Future<List<RecommendationVoteSuggestion>> getRecommendationVotes() =>
+      _repository.getRecommendationVotes();
+
+  Future<void> reviewRecommendationVote(
+      RecommendationVoteSuggestion suggestion, bool approve) async {
+    await _repository.reviewRecommendationVote(
+        suggestion.track.id, suggestion.playlist.id, approve);
+    if (approve) await load();
+  }
+
+  void _offerCompletedTrackVote() {
+    final track = current;
+    if (!isAuthenticated || room != null || track == null ||
+        eligibleVotePlaylists(track).isEmpty) return;
+    votePromptTrack = track;
+    _votePromptTimer?.cancel();
+    _votePromptTimer = Timer(const Duration(seconds: 5), dismissVotePrompt);
+    notifyListeners();
+  }
+
+  void dismissVotePrompt() {
+    _votePromptTimer?.cancel();
+    if (votePromptTrack == null) return;
+    votePromptTrack = null;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _sleepTimer?.cancel();
+    _votePromptTimer?.cancel();
     _roomPolling?.cancel();
     _roomPlaybackPublisher?.cancel();
     _roomRealtimePublisher?.cancel();

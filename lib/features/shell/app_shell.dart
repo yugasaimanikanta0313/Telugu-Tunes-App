@@ -53,8 +53,8 @@ class AppShell extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 840;
-        final content = Column(
-          children: [
+        final content = Stack(children: [
+          Column(children: [
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
@@ -69,8 +69,29 @@ class AppShell extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                           builder: (_) => const NowPlayingScreen()))),
-          ],
-        );
+          ]),
+          if (controller.votePromptTrack case final track?)
+            Positioned(
+              left: 16, right: 16, bottom: controller.current == null ? 16 : 82,
+              child: Center(child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 620),
+                child: Card(elevation: 12, child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+                  child: Row(children: [
+                    const Icon(Icons.how_to_vote_outlined),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text('Should “${track.title}” be added to a recommended playlist?')),
+                    TextButton(onPressed: () {
+                      controller.dismissVotePrompt();
+                      showRecommendationVoteSheet(context, track);
+                    }, child: const Text('Go to voting')),
+                    IconButton(onPressed: controller.dismissVotePrompt,
+                        tooltip: 'Not now', icon: const Icon(Icons.close_rounded)),
+                  ]),
+                )),
+              )),
+            ),
+        ]);
         return Scaffold(
           body: wide
               ? Row(

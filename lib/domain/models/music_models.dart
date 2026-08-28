@@ -190,6 +190,20 @@ class RecommendedPlaylist {
   final bool active;
 }
 
+class RecommendationVoteSuggestion {
+  const RecommendationVoteSuggestion({
+    required this.track,
+    required this.playlist,
+    required this.voteCount,
+    required this.reasons,
+  });
+
+  final Track track;
+  final RecommendedPlaylist playlist;
+  final int voteCount;
+  final List<String> reasons;
+}
+
 const recommendedPlaylistSubtypes = <String, List<String>>{
   'Devotional': ['Shiva', 'Venkateswara', 'Hanuman', 'Gospel', 'Sufi'],
   'Workout & Fitness': ['Leg Day', 'HIIT', 'Cardio/Running', 'Yoga/Stretching'],

@@ -70,6 +70,10 @@ public class RecommendedPlaylistService {
         defaultValue(value.artworkColor(), "7C4DFF"), artwork, tracks, value.active());
   }
 
+  RecommendedPlaylistResponse responseFor(RecommendedPlaylistDocument value) {
+    return response(value);
+  }
+
   private String clean(String value) { return value == null ? "" : value.trim(); }
   private String defaultValue(String value, String fallback) { return value == null || value.isBlank() ? fallback : value.trim(); }
   private String key(String name, String type, String subtype) {

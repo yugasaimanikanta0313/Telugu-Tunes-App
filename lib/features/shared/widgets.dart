@@ -420,6 +420,17 @@ Future<void> showTrackActions(BuildContext context, Track track) async {
                     Navigator.pop(sheetContext);
                     showAddToPlaylistSheet(context, track);
                   }),
+              if (controller.isAuthenticated &&
+                  controller.eligibleVotePlaylists(track).isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.how_to_vote_outlined),
+                  title: const Text('Suggest for a recommended playlist'),
+                  subtitle: const Text('Send an optional vote to administrators'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    showRecommendationVoteSheet(context, track);
+                  },
+                ),
               ListTile(
                 leading: Icon(controller.isDownloaded(track)
                     ? Icons.delete_outline_rounded
@@ -511,6 +522,77 @@ Future<void> showTrackActions(BuildContext context, Track track) async {
       ),
     ),
   );
+}
+
+Future<void> showRecommendationVoteSheet(
+    BuildContext context, Track track) async {
+  final music = context.read<MusicController>();
+  if (!music.isAuthenticated) {
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to vote for playlists.')));
+    return;
+  }
+  final playlists = music.eligibleVotePlaylists(track);
+  if (playlists.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('This song is already in all available playlists.')));
+    return;
+  }
+  var selected = playlists.first;
+  final reason = TextEditingController();
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (sheetContext) => StatefulBuilder(
+      builder: (context, setState) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            20, 4, 20, MediaQuery.viewInsetsOf(context).bottom + 20),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Vote for “${track.title}”',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          const Text('Choose where this song belongs. An administrator will review the result.'),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<RecommendedPlaylist>(
+            value: selected,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Recommended playlist'),
+            items: playlists.map((item) => DropdownMenuItem(
+                value: item,
+                child: Text('${item.name} • ${item.subtype}',
+                    overflow: TextOverflow.ellipsis))).toList(),
+            onChanged: (value) => setState(() => selected = value ?? selected),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: reason,
+            maxLength: 240,
+            decoration: const InputDecoration(
+                labelText: 'Why does it fit? (optional)'),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(width: double.infinity, child: FilledButton.icon(
+            icon: const Icon(Icons.how_to_vote_rounded),
+            label: const Text('Submit vote'),
+            onPressed: () async {
+              try {
+                await music.voteForRecommendation(track, selected, reason.text);
+                if (sheetContext.mounted) Navigator.pop(sheetContext);
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Vote sent for administrator review.')));
+              } catch (error) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(error.toString().replaceFirst('Bad state: ', ''))));
+              }
+            },
+          )),
+        ]),
+      ),
+    ),
+  );
+  reason.dispose();
 }
 
 Future<void> _replaceTrackAudio(BuildContext context, Track track) async {

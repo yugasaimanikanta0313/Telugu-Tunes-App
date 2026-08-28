@@ -19,6 +19,11 @@ abstract class MusicApiService {
   Future<RecommendedPlaylist> saveRecommendedPlaylist(
       RecommendedPlaylist playlist);
   Future<void> deleteRecommendedPlaylist(String id);
+  Future<void> voteForRecommendation(
+      String trackId, String playlistId, String reason);
+  Future<List<RecommendationVoteSuggestion>> getRecommendationVotes();
+  Future<void> reviewRecommendationVote(
+      String trackId, String playlistId, bool approve);
   Future<List<Track>> getFavorites();
   Future<List<Track>> setFavorite(String trackId, bool favorite);
   Future<ListeningRoom?> getRoom();
@@ -195,6 +200,34 @@ class SpringBootMusicApiService implements MusicApiService {
         headers: _headers);
     if (response.statusCode < 200 || response.statusCode >= 300)
       throw StateError(_errorMessage(response));
+  }
+
+  @override
+  Future<void> voteForRecommendation(
+      String trackId, String playlistId, String reason) async {
+    await _postEmpty('/recommendation-votes/tracks/$trackId', {
+      'recommendedPlaylistId': playlistId, 'reason': reason,
+    });
+  }
+
+  @override
+  Future<List<RecommendationVoteSuggestion>> getRecommendationVotes() async =>
+      (await _getList('/recommendation-votes/admin'))
+          .map((json) => RecommendationVoteSuggestion(
+                track: _track(Map<String, dynamic>.from(json['track'] as Map)),
+                playlist: _recommendedPlaylist(
+                    Map<String, dynamic>.from(json['playlist'] as Map)),
+                voteCount: (json['voteCount'] as num?)?.toInt() ?? 0,
+                reasons: _list(json['reasons']).map((v) => v.toString()).toList(),
+              ))
+          .toList();
+
+  @override
+  Future<void> reviewRecommendationVote(
+      String trackId, String playlistId, bool approve) async {
+    await _postEmpty(
+        '/recommendation-votes/admin/$playlistId/tracks/$trackId/${approve ? 'approve' : 'reject'}',
+        const {});
   }
 
   @override
@@ -596,6 +629,15 @@ class SpringBootMusicApiService implements MusicApiService {
           body: jsonEncode(body),
         ),
       );
+
+  Future<void> _postEmpty(String path, Map<String, dynamic> body) async {
+    final response = await _client.post(Uri.parse(config.baseUrl + path),
+        headers: {..._headers, 'Content-Type': 'application/json'},
+        body: jsonEncode(body));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(_errorMessage(response));
+    }
+  }
 
   Future<Map<String, dynamic>> _putMap(
     String path,
