@@ -209,6 +209,54 @@ class RecommendedPlaylist {
         : '$scheduleStart–$scheduleEnd';
     return '${days.isEmpty ? 'Every day' : days} • $time';
   }
+
+  RecommendedPlaylist withSchedule({
+    required bool enabled,
+    required List<int> days,
+    required String start,
+    required String end,
+  }) =>
+      RecommendedPlaylist(
+        id: id,
+        name: name,
+        description: description,
+        type: type,
+        subtype: subtype,
+        color: color,
+        tracks: tracks,
+        artworkUrl: artworkUrl,
+        active: active,
+        scheduleEnabled: enabled,
+        scheduleDays: days,
+        scheduleStart: start,
+        scheduleEnd: end,
+      );
+}
+
+class RecommendedPlaylistPreference {
+  const RecommendedPlaylistPreference({
+    required this.playlistId,
+    required this.enabled,
+    required this.scheduleDays,
+    this.scheduleStart = '',
+    this.scheduleEnd = '',
+  });
+
+  final String playlistId;
+  final bool enabled;
+  final List<int> scheduleDays;
+  final String scheduleStart;
+  final String scheduleEnd;
+}
+
+class FestivalRecommendation {
+  const FestivalRecommendation({
+    required this.festival,
+    required this.playlists,
+  });
+
+  final FestivalGreeting festival;
+  final List<RecommendedPlaylist> playlists;
 }
 
 class RecommendationVoteSuggestion {

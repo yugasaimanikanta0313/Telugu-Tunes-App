@@ -87,7 +87,10 @@ class MusicController extends ChangeNotifier {
   List<Album> _albums = [];
   List<Playlist> _playlists = [];
   List<RecommendedPlaylist> _recommendedPlaylists = [];
+  final Map<String, RecommendedPlaylistPreference> _recommendationPreferences =
+      {};
   FestivalGreeting? festivalGreeting;
+  FestivalRecommendation? festivalRecommendation;
   List<ListeningRoom> publicRooms = [];
   List<Track> searchResults = [];
   ListeningRoom? room;
@@ -123,6 +126,8 @@ class MusicController extends ChangeNotifier {
   List<Album> get albums => _albums;
   List<Playlist> get playlists => _playlists;
   List<RecommendedPlaylist> get recommendedPlaylists => _recommendedPlaylists;
+  Map<String, RecommendedPlaylistPreference> get recommendationPreferences =>
+      Map.unmodifiable(_recommendationPreferences);
   List<Track> get recentlyPlayed => _home?.recentlyPlayed ?? [];
   List<Track> get allTracks => [for (final album in _albums) ...album.tracks];
   List<Track> get favoriteTracks =>
@@ -140,6 +145,18 @@ class MusicController extends ChangeNotifier {
           : sleepEndsAt!.difference(DateTime.now());
   bool get canStream => _audio.isAvailable;
   bool get isAuthenticated => authToken.isNotEmpty && memberId.isNotEmpty;
+  RecommendedPlaylist effectiveRecommendedPlaylist(
+      RecommendedPlaylist playlist) {
+    final preference = _recommendationPreferences[playlist.id];
+    if (preference == null) return playlist;
+    return playlist.withSchedule(
+      enabled: preference.enabled,
+      days: preference.scheduleDays,
+      start: preference.scheduleStart,
+      end: preference.scheduleEnd,
+    );
+  }
+
   List<RecommendedPlaylist> eligibleVotePlaylists(Track track) =>
       _recommendedPlaylists
           .where((playlist) =>
@@ -176,11 +193,14 @@ class MusicController extends ChangeNotifier {
             _repository.getRecommendedPlaylists(), <RecommendedPlaylist>[]),
         _orDefault<FestivalGreeting?>(
             _repository.getTodayFestivalGreeting(), null),
+        _orDefault<FestivalRecommendation?>(
+            _repository.getFestivalRecommendation(), null),
       ]);
       _home = catalog[0] as HomeData;
       _albums = catalog[1] as List<Album>;
       _recommendedPlaylists = catalog[2] as List<RecommendedPlaylist>;
       festivalGreeting = catalog[3] as FestivalGreeting?;
+      festivalRecommendation = catalog[4] as FestivalRecommendation?;
       loadError = null;
 
       final account = isAuthenticated
@@ -189,14 +209,26 @@ class MusicController extends ChangeNotifier {
               _orDefault<ListeningRoom?>(_repository.getRoom(), null),
               _orDefault(_repository.getPublicRooms(), <ListeningRoom>[]),
               _orDefault(_repository.getFavorites(), <Track>[]),
+              _orDefault(_repository.getRecommendedPlaylistPreferences(),
+                  <RecommendedPlaylistPreference>[]),
             ])
-          : <dynamic>[<Playlist>[], null, <ListeningRoom>[], <Track>[]];
+          : <dynamic>[
+              <Playlist>[],
+              null,
+              <ListeningRoom>[],
+              <Track>[],
+              <RecommendedPlaylistPreference>[]
+            ];
       _playlists = account[0] as List<Playlist>;
       room = account[1] as ListeningRoom?;
       publicRooms = account[2] as List<ListeningRoom>;
       favorites
         ..clear()
         ..addAll((account[3] as List<Track>).map((track) => track.id));
+      _recommendationPreferences
+        ..clear()
+        ..addEntries((account[4] as List<RecommendedPlaylistPreference>)
+            .map((preference) => MapEntry(preference.playlistId, preference)));
     } catch (error) {
       _home ??= const HomeData(
         collections: [],
@@ -999,6 +1031,26 @@ class MusicController extends ChangeNotifier {
   Future<void> deleteRecommendedPlaylist(String id) async {
     await _repository.deleteRecommendedPlaylist(id);
     await load();
+  }
+
+  Future<void> saveRecommendedPlaylistPreference(
+      RecommendedPlaylistPreference preference) async {
+    if (!isAuthenticated) {
+      throw StateError('Sign in to customize your recommendation calendar.');
+    }
+    final saved =
+        await _repository.saveRecommendedPlaylistPreference(preference);
+    _recommendationPreferences[saved.playlistId] = saved;
+    notifyListeners();
+  }
+
+  Future<void> resetRecommendedPlaylistPreference(String playlistId) async {
+    if (!isAuthenticated) {
+      throw StateError('Sign in to customize your recommendation calendar.');
+    }
+    await _repository.resetRecommendedPlaylistPreference(playlistId);
+    _recommendationPreferences.remove(playlistId);
+    notifyListeners();
   }
 
   Future<void> voteForRecommendation(

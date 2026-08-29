@@ -28,6 +28,7 @@ public class AuthenticationFilter extends OncePerRequestFilter {
             && (path.startsWith("/api/v1/home")
                 || path.startsWith("/api/v1/albums")
                 || path.equals("/api/v1/recommended-playlists")
+                || path.equals("/api/v1/recommended-playlists/festival")
                 || path.equals("/api/v1/festival-greetings/today")
                 || path.startsWith("/api/v1/tracks/search")
                 || path.matches("/api/v1/tracks/[^/]+/lyrics")

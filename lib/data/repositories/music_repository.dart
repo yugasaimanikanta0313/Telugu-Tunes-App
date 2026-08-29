@@ -13,6 +13,12 @@ abstract class MusicRepository {
   Future<List<Playlist>> getPlaylists();
   Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
       {bool admin = false});
+  Future<List<RecommendedPlaylistPreference>>
+      getRecommendedPlaylistPreferences();
+  Future<RecommendedPlaylistPreference> saveRecommendedPlaylistPreference(
+      RecommendedPlaylistPreference preference);
+  Future<void> resetRecommendedPlaylistPreference(String playlistId);
+  Future<FestivalRecommendation?> getFestivalRecommendation();
   Future<FestivalGreeting?> getTodayFestivalGreeting();
   Future<RecommendedPlaylist> saveRecommendedPlaylist(
       RecommendedPlaylist playlist);
@@ -99,6 +105,20 @@ class SpringBootMusicRepository implements MusicRepository {
   Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
           {bool admin = false}) =>
       _api.getRecommendedPlaylists(admin: admin);
+  @override
+  Future<List<RecommendedPlaylistPreference>>
+      getRecommendedPlaylistPreferences() =>
+          _api.getRecommendedPlaylistPreferences();
+  @override
+  Future<RecommendedPlaylistPreference> saveRecommendedPlaylistPreference(
+          RecommendedPlaylistPreference preference) =>
+      _api.saveRecommendedPlaylistPreference(preference);
+  @override
+  Future<void> resetRecommendedPlaylistPreference(String playlistId) =>
+      _api.resetRecommendedPlaylistPreference(playlistId);
+  @override
+  Future<FestivalRecommendation?> getFestivalRecommendation() =>
+      _api.getFestivalRecommendation();
   @override
   Future<FestivalGreeting?> getTodayFestivalGreeting() =>
       _api.getTodayFestivalGreeting();
@@ -409,6 +429,21 @@ class MockMusicRepository implements MusicRepository {
   Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
           {bool admin = false}) async =>
       const [];
+
+  @override
+  Future<List<RecommendedPlaylistPreference>>
+      getRecommendedPlaylistPreferences() async => const [];
+
+  @override
+  Future<RecommendedPlaylistPreference> saveRecommendedPlaylistPreference(
+          RecommendedPlaylistPreference preference) async =>
+      preference;
+
+  @override
+  Future<void> resetRecommendedPlaylistPreference(String playlistId) async {}
+
+  @override
+  Future<FestivalRecommendation?> getFestivalRecommendation() async => null;
 
   @override
   Future<FestivalGreeting?> getTodayFestivalGreeting() async => null;

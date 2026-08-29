@@ -16,6 +16,12 @@ abstract class MusicApiService {
   Future<List<Playlist>> getPlaylists();
   Future<List<RecommendedPlaylist>> getRecommendedPlaylists(
       {bool admin = false});
+  Future<List<RecommendedPlaylistPreference>>
+      getRecommendedPlaylistPreferences();
+  Future<RecommendedPlaylistPreference> saveRecommendedPlaylistPreference(
+      RecommendedPlaylistPreference preference);
+  Future<void> resetRecommendedPlaylistPreference(String playlistId);
+  Future<FestivalRecommendation?> getFestivalRecommendation();
   Future<FestivalGreeting?> getTodayFestivalGreeting();
   Future<RecommendedPlaylist> saveRecommendedPlaylist(
       RecommendedPlaylist playlist);
@@ -175,6 +181,46 @@ class SpringBootMusicApiService implements MusicApiService {
               : '/recommended-playlists'))
           .map(_recommendedPlaylist)
           .toList();
+
+  @override
+  Future<List<RecommendedPlaylistPreference>>
+      getRecommendedPlaylistPreferences() async =>
+          (await _getList('/recommended-playlists/preferences'))
+              .map(_recommendedPlaylistPreference)
+              .toList();
+
+  @override
+  Future<RecommendedPlaylistPreference> saveRecommendedPlaylistPreference(
+          RecommendedPlaylistPreference preference) async =>
+      _recommendedPlaylistPreference(await _putMap(
+          '/recommended-playlists/preferences/${preference.playlistId}', {
+        'enabled': preference.enabled,
+        'scheduleDays': preference.scheduleDays,
+        'scheduleStart': preference.scheduleStart,
+        'scheduleEnd': preference.scheduleEnd,
+      }));
+
+  @override
+  Future<void> resetRecommendedPlaylistPreference(String playlistId) async {
+    final response = await _client.delete(
+        Uri.parse(
+            '${config.baseUrl}/recommended-playlists/preferences/$playlistId'),
+        headers: _headers);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(_errorMessage(response));
+    }
+  }
+
+  @override
+  Future<FestivalRecommendation?> getFestivalRecommendation() async {
+    final body = await _getMap('/recommended-playlists/festival');
+    if (body['festival'] is! Map) return null;
+    return FestivalRecommendation(
+      festival:
+          _festivalGreeting(Map<String, dynamic>.from(body['festival'] as Map)),
+      playlists: _list(body['playlists']).map(_recommendedPlaylist).toList(),
+    );
+  }
 
   @override
   Future<FestivalGreeting?> getTodayFestivalGreeting() async {
@@ -802,6 +848,21 @@ class SpringBootMusicApiService implements MusicApiService {
         tracks: _list(json['tracks']).map(_track).toList(),
         active: json['active'] as bool? ?? true,
         scheduleEnabled: json['scheduleEnabled'] as bool? ?? false,
+        scheduleDays: (json['scheduleDays'] is List
+                ? json['scheduleDays'] as List
+                : const <dynamic>[])
+            .whereType<num>()
+            .map((value) => value.toInt())
+            .toList(),
+        scheduleStart: json['scheduleStart'] as String? ?? '',
+        scheduleEnd: json['scheduleEnd'] as String? ?? '',
+      );
+
+  RecommendedPlaylistPreference _recommendedPlaylistPreference(
+          Map<String, dynamic> json) =>
+      RecommendedPlaylistPreference(
+        playlistId: json['playlistId'] as String,
+        enabled: json['enabled'] as bool? ?? true,
         scheduleDays: (json['scheduleDays'] is List
                 ? json['scheduleDays'] as List
                 : const <dynamic>[])

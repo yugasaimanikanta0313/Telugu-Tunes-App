@@ -2,12 +2,14 @@ package com.telugutunes.api.service;
 
 import com.telugutunes.api.api.dto.RecommendedPlaylistRequest;
 import com.telugutunes.api.api.dto.RecommendedPlaylistResponse;
+import com.telugutunes.api.api.dto.FestivalRecommendationResponse;
 import com.telugutunes.api.domain.RecommendedPlaylistDocument;
 import com.telugutunes.api.exception.NotFoundException;
 import com.telugutunes.api.repository.RecommendedPlaylistRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,11 +17,14 @@ public class RecommendedPlaylistService {
   private final RecommendedPlaylistRepository repository;
   private final CatalogService catalog;
   private final AuthService auth;
+  private final FestivalGreetingService festivals;
 
-  public RecommendedPlaylistService(RecommendedPlaylistRepository repository, CatalogService catalog, AuthService auth) {
+  public RecommendedPlaylistService(RecommendedPlaylistRepository repository, CatalogService catalog,
+      AuthService auth, FestivalGreetingService festivals) {
     this.repository = repository;
     this.catalog = catalog;
     this.auth = auth;
+    this.festivals = festivals;
   }
 
   public List<RecommendedPlaylistResponse> publicList() {
@@ -33,6 +38,18 @@ public class RecommendedPlaylistService {
   public List<RecommendedPlaylistResponse> adminList(String memberId) {
     auth.requireAdministrator(memberId);
     return repository.findAll().stream().map(this::response).toList();
+  }
+
+  public FestivalRecommendationResponse festivalRecommendations() {
+    var festival = festivals.today().orElse(null);
+    if (festival == null) return new FestivalRecommendationResponse(null, List.of());
+    var keywords = festivalKeywords(festival.festival());
+    var matches = publicList().stream().filter(item -> {
+      var searchable = (item.name() + " " + item.type() + " " + item.subtype())
+          .toLowerCase(Locale.ROOT);
+      return keywords.stream().anyMatch(searchable::contains);
+    }).toList();
+    return new FestivalRecommendationResponse(festival, matches);
   }
 
   public RecommendedPlaylistResponse save(String memberId, String id, RecommendedPlaylistRequest request) {
@@ -87,6 +104,29 @@ public class RecommendedPlaylistService {
   private List<Integer> validDays(List<Integer> days) {
     if (days == null) return List.of();
     return days.stream().filter(day -> day != null && day >= 1 && day <= 7).distinct().sorted().toList();
+  }
+
+  private List<String> festivalKeywords(String name) {
+    var value = clean(name).toLowerCase(Locale.ROOT);
+    if (containsAny(value, "vinayaka", "ganesh", "గణేశ", "వినాయక"))
+      return List.of("vinayaka", "ganesh", "ganapathi", "గణేశ", "వినాయక");
+    if (containsAny(value, "shivaratri", "శివరాత్రి")) return List.of("shiva", "శివ");
+    if (containsAny(value, "rama navami", "ram navami", "రామ నవమి")) return List.of("rama", "రామ");
+    if (containsAny(value, "janmashtami", "krishnashtami", "కృష్ణాష్టమి"))
+      return List.of("krishna", "కృష్ణ");
+    if (containsAny(value, "hanuman", "హనుమ")) return List.of("hanuman", "anjaneya", "హనుమ", "ఆంజనేయ");
+    if (containsAny(value, "dussehra", "dasara", "navaratri", "దసరా"))
+      return List.of("durga", "devi", "amma", "దుర్గ", "దేవి");
+    if (containsAny(value, "deepavali", "diwali", "దీపావళి"))
+      return List.of("deepavali", "diwali", "celebration", "దీపావళి");
+    if (containsAny(value, "ugadi", "ఉగాది")) return List.of("ugadi", "ఉగాది");
+    if (containsAny(value, "sankranti", "సంక్రాంతి")) return List.of("sankranti", "సంక్రాంతి");
+    return List.of(value);
+  }
+
+  private boolean containsAny(String value, String... candidates) {
+    for (var candidate : candidates) if (value.contains(candidate)) return true;
+    return false;
   }
 
 }
