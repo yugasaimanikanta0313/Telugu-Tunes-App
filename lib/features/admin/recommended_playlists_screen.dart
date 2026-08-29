@@ -106,17 +106,45 @@ class _RecommendedPlaylistsScreenState
                             subtitle: Text(
                                 '${group.type} • ${group.variants.length} subtype${group.variants.length == 1 ? '' : 's'}'),
                             children: [
-                              ...group.variants.map((item) => ListTile(
-                                    contentPadding: const EdgeInsets.only(
-                                        left: 28, right: 16),
-                                    leading: const Icon(
-                                        Icons.subdirectory_arrow_right_rounded),
+                              ...group.variants.map((item) => ExpansionTile(
+                                    tilePadding: const EdgeInsets.only(
+                                        left: 28, right: 8),
+                                    childrenPadding: const EdgeInsets.only(
+                                        left: 54, right: 16, bottom: 8),
+                                    leading:
+                                        const Icon(Icons.queue_music_rounded),
                                     title: Text(item.subtype),
                                     subtitle: Text(
                                         '${item.tracks.length} songs${item.active ? '' : ' • Hidden'}\n${item.scheduleLabel}'),
-                                    isThreeLine: true,
-                                    trailing: const Icon(Icons.edit_outlined),
-                                    onTap: () => _edit(item),
+                                    trailing: IconButton(
+                                      tooltip: 'Edit ${item.subtype}',
+                                      onPressed: () => _edit(item),
+                                      icon: const Icon(Icons.edit_outlined),
+                                    ),
+                                    children: item.tracks.isEmpty
+                                        ? const [
+                                            ListTile(
+                                              dense: true,
+                                              leading:
+                                                  Icon(Icons.music_off_rounded),
+                                              title:
+                                                  Text('No songs included yet'),
+                                            )
+                                          ]
+                                        : item.tracks
+                                            .map((track) => ListTile(
+                                                  dense: true,
+                                                  leading: Artwork(
+                                                    color: track.color,
+                                                    label: track.title,
+                                                    imageUrl: track.artworkUrl,
+                                                    size: 38,
+                                                  ),
+                                                  title: Text(track.title),
+                                                  subtitle: Text(
+                                                      '${track.artist} • ${track.album}'),
+                                                ))
+                                            .toList(),
                                   )),
                               Align(
                                 alignment: Alignment.centerRight,

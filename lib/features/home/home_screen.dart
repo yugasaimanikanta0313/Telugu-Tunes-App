@@ -7,13 +7,36 @@ import '../album/album_detail_screen.dart';
 import '../import/import_music_sheet.dart';
 import '../shared/widgets.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _DashboardRecommendedGroup {
+  _DashboardRecommendedGroup(this.variants) : assert(variants.isNotEmpty);
+
+  final List<RecommendedPlaylist> variants;
+  RecommendedPlaylist get first => variants.first;
+  String get name => first.name;
+  String get type => first.type;
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _selectedWeekday = DateTime.now().weekday;
 
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<MusicController>();
-    final recommended = _groupRecommendations(controller.recommendedPlaylists);
+    final now = DateTime.now();
+    final weekStart = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    final week =
+        List.generate(7, (index) => weekStart.add(Duration(days: index)));
+    final selectedDate = week[_selectedWeekday - 1];
+    final recommended =
+        _scheduledGroups(controller.recommendedPlaylists, selectedDate.weekday);
     if (controller.loading)
       return const Center(child: CircularProgressIndicator());
     return CustomScrollView(
@@ -84,27 +107,98 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           ),
-        if (recommended.isNotEmpty) ...[
-          const SliverToBoxAdapter(
-              child: SectionTitle(title: 'Recommended playlists')),
+        if (controller.recommendedPlaylists.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+              child: Row(children: [
+                Expanded(
+                  child: Text('Your weekly soundtrack',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w900)),
+                ),
+                Text(_longDate(selectedDate),
+                    style: Theme.of(context).textTheme.labelLarge),
+              ]),
+            ),
+          ),
           SliverToBoxAdapter(
             child: SizedBox(
-              height: 210,
-              child: ListView.builder(
-                padding: const EdgeInsets.only(left: 20),
+              height: 76,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 scrollDirection: Axis.horizontal,
-                itemCount: recommended.length,
+                itemCount: week.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
-                  final playlist = recommended[index];
-                  return CollectionCard(
-                    title: playlist.name,
-                    subtitle:
-                        '${playlist.type} • ${playlist.subtype}\nAvailable now',
-                    color: playlist.color,
-                    imageUrl: playlist.artworkUrl,
-                    onTap: () => _showRecommended(context, playlist),
+                  final date = week[index];
+                  final selected = date.weekday == _selectedWeekday;
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () =>
+                        setState(() => _selectedWeekday = date.weekday),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: 68,
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        color: selected
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.surfaceContainer,
+                        border: Border.all(
+                          color: selected
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: Column(children: [
+                        Text(_shortWeekday(date.weekday),
+                            style: TextStyle(
+                                color: selected
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : null,
+                                fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 3),
+                        Text('${date.day}',
+                            style: TextStyle(
+                                color: selected
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : null,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900)),
+                      ]),
+                    ),
                   );
                 },
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+              child: Column(
+                children: recommended.isEmpty
+                    ? [
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Row(children: [
+                              const Icon(Icons.event_available_rounded),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                    'No playlist is scheduled for ${_longDate(selectedDate)}.'),
+                              ),
+                            ]),
+                          ),
+                        )
+                      ]
+                    : recommended
+                        .map((group) => _scheduleGroupCard(context, group))
+                        .toList(),
               ),
             ),
           ),
@@ -307,34 +401,133 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  List<RecommendedPlaylist> _groupRecommendations(
-      List<RecommendedPlaylist> source) {
+  List<_DashboardRecommendedGroup> _scheduledGroups(
+      List<RecommendedPlaylist> source, int weekday) {
     final groups = <String, List<RecommendedPlaylist>>{};
     for (final item in source) {
+      if (item.scheduleEnabled &&
+          item.scheduleDays.isNotEmpty &&
+          !item.scheduleDays.contains(weekday)) {
+        continue;
+      }
       final key =
           '${item.name.trim().toLowerCase()}|${item.type.trim().toLowerCase()}';
       groups.putIfAbsent(key, () => []).add(item);
     }
-    return groups.values.map((variants) {
-      final first = variants.first;
-      final tracks = <String, Track>{};
-      for (final variant in variants) {
-        for (final track in variant.tracks) {
-          tracks.putIfAbsent(track.id, () => track);
-        }
-      }
-      final subtypes = variants.map((item) => item.subtype).toSet().join(' • ');
-      return RecommendedPlaylist(
-        id: first.id,
-        name: first.name,
-        description: first.description,
-        type: first.type,
-        subtype: subtypes,
-        color: first.color,
-        artworkUrl: first.artworkUrl,
-        tracks: tracks.values.toList(),
-      );
-    }).toList();
+    return groups.values.map(_DashboardRecommendedGroup.new).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+  Widget _scheduleGroupCard(
+      BuildContext context, _DashboardRecommendedGroup group) {
+    final colors = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Artwork(
+              color: group.first.color,
+              label: group.name,
+              imageUrl: group.first.artworkUrl,
+              size: 54,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(group.name,
+                      style: const TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.w900)),
+                  Text('${group.type} • ${group.variants.length} scheduled'),
+                ],
+              ),
+            ),
+            Icon(Icons.calendar_month_rounded, color: colors.primary),
+          ]),
+          const SizedBox(height: 12),
+          ...group.variants.map((playlist) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => _showRecommended(context, playlist),
+                  child: Ink(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: colors.surfaceContainerHighest,
+                    ),
+                    child: Row(children: [
+                      Container(
+                        width: 5,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: colorFromHex(playlist.color),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(playlist.subtype,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w900)),
+                            Text(
+                                '${_timeLabel(playlist)} • ${playlist.tracks.length} songs'),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.play_circle_outline_rounded),
+                    ]),
+                  ),
+                ),
+              )),
+        ]),
+      ),
+    );
+  }
+
+  String _timeLabel(RecommendedPlaylist playlist) {
+    if (!playlist.scheduleEnabled) return 'Anytime';
+    if (playlist.scheduleStart.isEmpty || playlist.scheduleEnd.isEmpty) {
+      return 'All day';
+    }
+    return '${playlist.scheduleStart}–${playlist.scheduleEnd}';
+  }
+
+  String _shortWeekday(int weekday) =>
+      const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][weekday - 1];
+
+  String _longDate(DateTime date) {
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday'
+    ];
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
+    ];
+    return '${weekdays[date.weekday - 1]}, ${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
   void _showRecommended(BuildContext context, RecommendedPlaylist playlist) {
