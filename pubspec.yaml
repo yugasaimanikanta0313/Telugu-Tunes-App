@@ -21,6 +21,7 @@ dependencies:
   cached_network_image: ^3.4.1
   palette_generator: ^0.3.3+7
   web_socket_channel: ^3.0.3
+  google_mlkit_translation: ^0.14.0
 
 dev_dependencies:
   flutter_test:

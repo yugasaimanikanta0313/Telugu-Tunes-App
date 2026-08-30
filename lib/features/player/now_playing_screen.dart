@@ -387,14 +387,56 @@ class _LyricsPanel extends StatelessWidget {
               ),
             )
           else if (lyrics?.plainLyrics.trim().isNotEmpty == true)
-            Text(
-              lyrics!.plainLyrics.split(RegExp(r'\r?\n')).first,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  lyrics!.plainLyrics.split(RegExp(r'\r?\n')).first,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (lyrics.englishPlainLyrics.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    lyrics.englishPlainLyrics.split(RegExp(r'\r?\n')).first,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ],
+              ],
             )
           else
             Text(controller.lyricsError ??
                 'No synced lyrics found. An admin can add an LRC file.'),
+          if (lyrics?.hasEnglish == true) ...[
+            const SizedBox(height: 8),
+            Text(
+              lyrics!.englishSource == 'mlkit'
+                  ? 'Translated on device by Google • draft translation'
+                  : 'Admin-approved English translation',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Colors.white60,
+                  ),
+            ),
+          ],
+          if (controller.canTranslateLyricsOffline &&
+              lyrics?.hasLyrics == true &&
+              lyrics?.hasEnglish != true) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: controller.offlineLyricsTranslationLoading
+                  ? null
+                  : () => _translateOffline(context),
+              icon: controller.offlineLyricsTranslationLoading
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.offline_bolt_outlined, size: 18),
+              label: const Text('Translate offline'),
+            ),
+          ],
           if (controller.isAdmin) ...[
             const SizedBox(height: 10),
             Wrap(
@@ -492,6 +534,51 @@ class _LyricsPanel extends StatelessWidget {
         content: Text(
             'Start the IndicTrans2 Admin Translator on this computer, then try again. ${error.toString().replaceFirst('Bad state: ', '')}'),
       ));
+    }
+  }
+
+  Future<void> _translateOffline(BuildContext context) async {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Enable offline English lyrics?'),
+        content: const Text(
+          'Telugu and English translation models will download over Wi-Fi. '
+          'Allow about 60 MB for both models. Afterward, translations work '
+          'on this phone without an API key or server connection. The result '
+          'is a draft; admin-approved English always replaces it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.download_rounded),
+            label: const Text('Download & translate'),
+          ),
+        ],
+      ),
+    );
+    if (proceed != true || !context.mounted) return;
+    try {
+      await controller.translateCurrentLyricsOffline();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Offline English lyrics are ready on this phone.'),
+        ));
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'Could not translate offline. Connect to Wi-Fi for the first '
+            'model download, then retry. '
+            '${error.toString().replaceFirst('Bad state: ', '')}',
+          ),
+        ));
+      }
     }
   }
 
@@ -637,7 +724,8 @@ class _SyncedLyricsSheet extends StatelessWidget {
               leading: const Icon(Icons.lyrics_rounded),
               title: Text(controller.current?.title ?? 'Lyrics'),
               subtitle: Text(
-                  'Source: ${lyrics?.source ?? 'unavailable'} • ${lines.isEmpty ? 'plain' : 'time-synced'}'),
+                  'Source: ${lyrics?.source ?? 'unavailable'} • ${lines.isEmpty ? 'plain' : 'time-synced'}'
+                  '${lyrics?.englishSource == 'mlkit' ? ' • English translated on device by Google (draft)' : lyrics?.englishSource == 'admin' ? ' • Admin-approved English' : ''}'),
             ),
             Expanded(
               child: lines.isEmpty
