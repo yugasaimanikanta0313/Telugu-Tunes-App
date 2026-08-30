@@ -24,7 +24,6 @@ android {
         applicationId = "com.example.telugu_tunes"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // Google ML Kit on-device translation requires Android API 23+.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

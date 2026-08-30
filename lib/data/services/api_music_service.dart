@@ -1006,11 +1006,6 @@ class SpringBootMusicApiService implements MusicApiService {
       englishPlainLyrics: json['englishPlainLyrics'] as String? ?? '',
       englishSyncedLyrics: englishSynced,
       englishLines: englishLines,
-      englishSource:
-          (json['englishPlainLyrics'] as String? ?? '').trim().isNotEmpty ||
-                  englishLines.isNotEmpty
-              ? 'admin'
-              : '',
     );
   }
 

@@ -7,7 +7,6 @@ import '../data/repositories/music_repository.dart';
 import '../data/services/audio_playback_service.dart';
 import '../data/services/artwork_palette_service.dart';
 import '../data/services/offline_download_service.dart';
-import '../data/services/offline_lyrics_translation_service.dart';
 import '../data/services/room_realtime_service.dart';
 import '../domain/models/music_models.dart';
 
@@ -23,7 +22,6 @@ class MusicController extends ChangeNotifier {
   }) {
     _palette = ArtworkPaletteService();
     _offline = OfflineDownloadService(apiBaseUrl, authToken);
-    _lyricsTranslation = OfflineLyricsTranslationService();
     _audio = AudioPlaybackService(
       apiBaseUrl,
       authToken,
@@ -72,7 +70,6 @@ class MusicController extends ChangeNotifier {
   late final AudioPlaybackService _audio;
   late final ArtworkPaletteService _palette;
   late final OfflineDownloadService _offline;
-  late final OfflineLyricsTranslationService _lyricsTranslation;
   late final RoomRealtimeService _roomRealtime;
   late final List<StreamSubscription<dynamic>> _subscriptions;
   Timer? _roomPolling;
@@ -119,7 +116,6 @@ class MusicController extends ChangeNotifier {
   TrackLyrics? currentLyrics;
   Track? votePromptTrack;
   bool lyricsLoading = false;
-  bool offlineLyricsTranslationLoading = false;
   String? lyricsError;
   DateTime? sleepEndsAt;
   bool _sleepStoppedPlayback = false;
@@ -148,7 +144,6 @@ class MusicController extends ChangeNotifier {
           ? Duration.zero
           : sleepEndsAt!.difference(DateTime.now());
   bool get canStream => _audio.isAvailable;
-  bool get canTranslateLyricsOffline => _lyricsTranslation.isAvailable;
   bool get isAuthenticated => authToken.isNotEmpty && memberId.isNotEmpty;
   RecommendedPlaylist effectiveRecommendedPlaylist(
       RecommendedPlaylist playlist) {
@@ -815,24 +810,7 @@ class MusicController extends ChangeNotifier {
       final result = force
           ? await _repository.refreshLyrics(track.id)
           : await _repository.getLyrics(track.id);
-      if (current?.id == track.id) {
-        currentLyrics = result;
-        if (!result.hasEnglish) {
-          final cached = await _lyricsTranslation.cachedTranslation(
-            trackId: track.id,
-            plainLyrics: result.plainLyrics,
-            syncedLyrics: result.syncedLyrics,
-          );
-          if (cached != null && current?.id == track.id) {
-            currentLyrics = result.withEnglish(
-              plainLyrics: cached.plainLyrics,
-              syncedLyrics: cached.syncedLyrics,
-              lines: cached.lines,
-              source: 'mlkit',
-            );
-          }
-        }
-      }
+      if (current?.id == track.id) currentLyrics = result;
     } catch (error) {
       if (current?.id == track.id) {
         lyricsError = error.toString().replaceFirst('Bad state: ', '');
@@ -871,38 +849,6 @@ class MusicController extends ChangeNotifier {
     );
     lyricsError = null;
     notifyListeners();
-  }
-
-  Future<void> translateCurrentLyricsOffline({bool wifiOnly = true}) async {
-    final lyrics = currentLyrics;
-    final track = current;
-    if (lyrics == null || track == null || !lyrics.hasLyrics) return;
-    if (lyrics.hasEnglish && lyrics.englishSource != 'mlkit') return;
-    offlineLyricsTranslationLoading = true;
-    lyricsError = null;
-    notifyListeners();
-    try {
-      final translated = await _lyricsTranslation.translate(
-        trackId: track.id,
-        plainLyrics: lyrics.plainLyrics,
-        syncedLyrics: lyrics.syncedLyrics,
-        wifiOnly: wifiOnly,
-      );
-      if (current?.id == track.id) {
-        currentLyrics = lyrics.withEnglish(
-          plainLyrics: translated.plainLyrics,
-          syncedLyrics: translated.syncedLyrics,
-          lines: translated.lines,
-          source: 'mlkit',
-        );
-      }
-    } catch (error) {
-      lyricsError = error.toString().replaceFirst('Bad state: ', '');
-      rethrow;
-    } finally {
-      offlineLyricsTranslationLoading = false;
-      notifyListeners();
-    }
   }
 
   void startSleepTimer(Duration duration) {
