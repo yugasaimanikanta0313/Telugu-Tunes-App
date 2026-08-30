@@ -11,6 +11,8 @@ public record LyricsDocument(
     String source,
     String plainLyrics,
     String syncedLyrics,
+    String englishPlainLyrics,
+    String englishSyncedLyrics,
     String sourceUrl,
     Double confidence,
     String updatedByMemberId,

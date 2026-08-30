@@ -2,6 +2,7 @@ package com.telugutunes.api.service;
 
 import com.telugutunes.api.api.dto.LyricsResponse;
 import com.telugutunes.api.api.dto.UpdateLyricsRequest;
+import com.telugutunes.api.api.dto.UpdateLyricsTranslationRequest;
 import com.telugutunes.api.config.AppProperties;
 import com.telugutunes.api.domain.LyricsDocument;
 import com.telugutunes.api.repository.LyricsRepository;
@@ -56,7 +57,22 @@ public class LyricsService {
     var document = new LyricsDocument(
         trackId, blankDefault(request.language(), "te"), "manual",
         request.plainLyrics().trim(), request.syncedLyrics().trim(),
+        "", "",
         null, 1.0, memberId, Instant.now());
+    return response(lyrics.save(document));
+  }
+
+  public LyricsResponse updateTranslation(
+      String memberId, String trackId, UpdateLyricsTranslationRequest request) {
+    auth.requireAdministrator(memberId);
+    catalog.trackDocument(trackId);
+    var existing = lyrics.findById(trackId)
+        .orElseThrow(() -> new IllegalStateException("Add Telugu lyrics before translating them."));
+    var document = new LyricsDocument(
+        existing.trackId(), existing.language(), existing.source(),
+        blankDefault(existing.plainLyrics(), ""), blankDefault(existing.syncedLyrics(), ""),
+        request.englishPlainLyrics().trim(), request.englishSyncedLyrics().trim(),
+        existing.sourceUrl(), existing.confidence(), memberId, Instant.now());
     return response(lyrics.save(document));
   }
 
@@ -72,14 +88,14 @@ public class LyricsService {
         return lyrics.save(new LyricsDocument(
             trackId, "te", found.source(),
             blankDefault(found.plainLyrics(), LrcValidator.plainText(found.syncedLyrics())),
-            found.syncedLyrics().trim(), found.sourceUrl(), found.confidence(),
+            found.syncedLyrics().trim(), "", "", found.sourceUrl(), found.confidence(),
             updatedBy, Instant.now()));
       }
       log.info("Lyrics provider miss provider={} trackId={}", provider.name(), trackId);
     }
     log.info("Lyrics unavailable after all providers trackId={}", trackId);
     return lyrics.save(new LyricsDocument(
-        trackId, "te", "unavailable", "", "", null, 0.0, updatedBy, Instant.now()));
+        trackId, "te", "unavailable", "", "", "", "", null, 0.0, updatedBy, Instant.now()));
   }
 
   private boolean isReusable(LyricsDocument document) {
@@ -97,6 +113,7 @@ public class LyricsService {
     return new LyricsResponse(
         value.trackId(), value.language(), value.source(),
         blankDefault(value.plainLyrics(), ""), blankDefault(value.syncedLyrics(), ""),
+        blankDefault(value.englishPlainLyrics(), ""), blankDefault(value.englishSyncedLyrics(), ""),
         value.updatedAt());
   }
 

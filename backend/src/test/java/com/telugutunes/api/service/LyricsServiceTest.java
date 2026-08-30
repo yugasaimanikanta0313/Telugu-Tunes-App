@@ -88,7 +88,7 @@ class LyricsServiceTest {
   @Test
   void duplicateCallsReuseNegativeCache() {
     var unavailable = new LyricsDocument("track-1", "te", "unavailable", "", "",
-        null, 0.0, "system", Instant.now());
+        "", "", null, 0.0, "system", Instant.now());
     when(repository.findById("track-1"))
         .thenReturn(Optional.empty())
         .thenReturn(Optional.of(unavailable));
@@ -113,6 +113,6 @@ class LyricsServiceTest {
 
   private LyricsDocument document(String source) {
     return new LyricsDocument("track-1", "te", source, "మొదటి\nరెండవ",
-        "[00:01.00]మొదటి\n[00:02.00]రెండవ", null, 1.0, "member-1", Instant.now());
+        "[00:01.00]మొదటి\n[00:02.00]రెండవ", "", "", null, 1.0, "member-1", Instant.now());
   }
 }

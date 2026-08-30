@@ -91,10 +91,12 @@ class Artwork extends StatelessWidget {
         memCacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
         fadeInDuration: const Duration(milliseconds: 180),
         imageBuilder: (_, imageProvider) => ColoredBox(
-          color: colorFromHex(color).withOpacity(.18),
+          color: Colors.black,
           child: Image(
             image: imageProvider,
-            fit: BoxFit.contain,
+            fit: BoxFit.cover,
+            width: size,
+            height: size,
             filterQuality: FilterQuality.high,
           ),
         ),

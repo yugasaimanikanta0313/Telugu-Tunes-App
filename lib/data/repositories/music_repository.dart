@@ -91,6 +91,11 @@ abstract class MusicRepository {
     required String plainLyrics,
     required String syncedLyrics,
   });
+  Future<TrackLyrics> updateLyricsTranslation(
+    String trackId, {
+    required String englishPlainLyrics,
+    required String englishSyncedLyrics,
+  });
   Future<String> askAssistant(String prompt);
 }
 
@@ -278,6 +283,17 @@ class SpringBootMusicRepository implements MusicRepository {
         language: language,
         plainLyrics: plainLyrics,
         syncedLyrics: syncedLyrics,
+      );
+  @override
+  Future<TrackLyrics> updateLyricsTranslation(
+    String trackId, {
+    required String englishPlainLyrics,
+    required String englishSyncedLyrics,
+  }) =>
+      _api.updateLyricsTranslation(
+        trackId,
+        englishPlainLyrics: englishPlainLyrics,
+        englishSyncedLyrics: englishSyncedLyrics,
       );
   @override
   Future<String> askAssistant(String prompt) => _api.askAssistant(prompt);
@@ -736,6 +752,14 @@ class MockMusicRepository implements MusicRepository {
     required String language,
     required String plainLyrics,
     required String syncedLyrics,
+  }) =>
+      getLyrics(trackId);
+
+  @override
+  Future<TrackLyrics> updateLyricsTranslation(
+    String trackId, {
+    required String englishPlainLyrics,
+    required String englishSyncedLyrics,
   }) =>
       getLyrics(trackId);
 

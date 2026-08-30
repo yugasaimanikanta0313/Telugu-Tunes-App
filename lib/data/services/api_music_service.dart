@@ -105,6 +105,11 @@ abstract class MusicApiService {
     required String plainLyrics,
     required String syncedLyrics,
   });
+  Future<TrackLyrics> updateLyricsTranslation(
+    String trackId, {
+    required String englishPlainLyrics,
+    required String englishSyncedLyrics,
+  });
   Future<String> askAssistant(String prompt);
 }
 
@@ -716,6 +721,17 @@ class SpringBootMusicApiService implements MusicApiService {
       }));
 
   @override
+  Future<TrackLyrics> updateLyricsTranslation(
+    String trackId, {
+    required String englishPlainLyrics,
+    required String englishSyncedLyrics,
+  }) async =>
+      _lyrics(await _putMap('/tracks/$trackId/lyrics/translation', {
+        'englishPlainLyrics': englishPlainLyrics,
+        'englishSyncedLyrics': englishSyncedLyrics,
+      }));
+
+  @override
   Future<String> askAssistant(String prompt) async {
     final response = await _client.post(
       Uri.parse(config.baseUrl + '/assistant'),
@@ -977,6 +993,23 @@ class SpringBootMusicApiService implements MusicApiService {
 
   TrackLyrics _lyrics(Map<String, dynamic> json) {
     final synced = json['syncedLyrics'] as String? ?? '';
+    final englishSynced = json['englishSyncedLyrics'] as String? ?? '';
+    final lines = _parseSyncedLyrics(synced);
+    final englishLines = _parseSyncedLyrics(englishSynced);
+    return TrackLyrics(
+      trackId: json['trackId'] as String? ?? '',
+      language: json['language'] as String? ?? 'te',
+      source: json['source'] as String? ?? 'unavailable',
+      plainLyrics: json['plainLyrics'] as String? ?? '',
+      syncedLyrics: synced,
+      lines: lines,
+      englishPlainLyrics: json['englishPlainLyrics'] as String? ?? '',
+      englishSyncedLyrics: englishSynced,
+      englishLines: englishLines,
+    );
+  }
+
+  List<SyncedLyricLine> _parseSyncedLyrics(String synced) {
     final expression = RegExp(r'^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$');
     final lines = <SyncedLyricLine>[];
     for (final rawLine in synced.split(RegExp(r'\r?\n'))) {
@@ -991,13 +1024,6 @@ class SpringBootMusicApiService implements MusicApiService {
       ));
     }
     lines.sort((a, b) => a.start.compareTo(b.start));
-    return TrackLyrics(
-      trackId: json['trackId'] as String? ?? '',
-      language: json['language'] as String? ?? 'te',
-      source: json['source'] as String? ?? 'unavailable',
-      plainLyrics: json['plainLyrics'] as String? ?? '',
-      syncedLyrics: synced,
-      lines: lines,
-    );
+    return lines;
   }
 }

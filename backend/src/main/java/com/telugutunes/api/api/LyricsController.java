@@ -2,6 +2,7 @@ package com.telugutunes.api.api;
 
 import com.telugutunes.api.api.dto.LyricsResponse;
 import com.telugutunes.api.api.dto.UpdateLyricsRequest;
+import com.telugutunes.api.api.dto.UpdateLyricsTranslationRequest;
 import com.telugutunes.api.config.AuthenticationFilter;
 import com.telugutunes.api.service.LyricsService;
 import jakarta.validation.Valid;
@@ -41,5 +42,13 @@ public class LyricsController {
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
       @Valid @RequestBody UpdateLyricsRequest request) {
     return lyrics.update(memberId, trackId, request);
+  }
+
+  @PutMapping("/translation")
+  public LyricsResponse updateTranslation(
+      @PathVariable String trackId,
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
+      @Valid @RequestBody UpdateLyricsTranslationRequest request) {
+    return lyrics.updateTranslation(memberId, trackId, request);
   }
 }

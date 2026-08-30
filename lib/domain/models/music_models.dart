@@ -530,6 +530,9 @@ class TrackLyrics {
     required this.plainLyrics,
     required this.syncedLyrics,
     required this.lines,
+    this.englishPlainLyrics = '',
+    this.englishSyncedLyrics = '',
+    this.englishLines = const [],
   });
 
   final String trackId;
@@ -538,7 +541,12 @@ class TrackLyrics {
   final String plainLyrics;
   final String syncedLyrics;
   final List<SyncedLyricLine> lines;
+  final String englishPlainLyrics;
+  final String englishSyncedLyrics;
+  final List<SyncedLyricLine> englishLines;
 
   bool get hasLyrics => plainLyrics.trim().isNotEmpty || lines.isNotEmpty;
   bool get isSynced => lines.isNotEmpty;
+  bool get hasEnglish =>
+      englishPlainLyrics.trim().isNotEmpty || englishLines.isNotEmpty;
 }

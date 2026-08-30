@@ -837,6 +837,20 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateLyricsTranslation(
+    Track track, {
+    required String englishPlainLyrics,
+    required String englishSyncedLyrics,
+  }) async {
+    currentLyrics = await _repository.updateLyricsTranslation(
+      track.id,
+      englishPlainLyrics: englishPlainLyrics,
+      englishSyncedLyrics: englishSyncedLyrics,
+    );
+    lyricsError = null;
+    notifyListeners();
+  }
+
   void startSleepTimer(Duration duration) {
     _sleepTimer?.cancel();
     _sleepStoppedPlayback = false;

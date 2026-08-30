@@ -8,4 +8,6 @@ public record LyricsResponse(
     String source,
     String plainLyrics,
     String syncedLyrics,
+    String englishPlainLyrics,
+    String englishSyncedLyrics,
     Instant updatedAt) {}

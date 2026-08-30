@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../../domain/models/music_models.dart';
@@ -326,6 +328,8 @@ class _LyricsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final lyrics = controller.currentLyrics;
     final currentLine = _currentLine(lyrics, controller.position);
+    final currentEnglishLine =
+        _currentLineFrom(lyrics?.englishLines ?? const [], controller.position);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -359,15 +363,27 @@ class _LyricsPanel extends StatelessWidget {
           else if (currentLine != null)
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
-              child: Text(
-                currentLine.text,
+              child: Column(
                 key: ValueKey(currentLine.start),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w900,
-                      height: 1.5,
-                    ),
+                children: [
+                  Text(currentLine.text,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w900,
+                            height: 1.5,
+                          )),
+                  if (currentEnglishLine != null &&
+                      currentEnglishLine.text.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(currentEnglishLine.text,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Colors.white70,
+                              height: 1.35,
+                            )),
+                  ],
+                ],
               ),
             )
           else if (lyrics?.plainLyrics.trim().isNotEmpty == true)
@@ -396,6 +412,15 @@ class _LyricsPanel extends StatelessWidget {
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   label: const Text('Edit LRC'),
                 ),
+                TextButton.icon(
+                  onPressed: lyrics?.hasLyrics == true
+                      ? () => _generateEnglish(context)
+                      : null,
+                  icon: const Icon(Icons.translate_rounded, size: 18),
+                  label: Text(lyrics?.hasEnglish == true
+                      ? 'Regenerate English'
+                      : 'Generate English'),
+                ),
               ],
             ),
           ],
@@ -405,13 +430,122 @@ class _LyricsPanel extends StatelessWidget {
   }
 
   SyncedLyricLine? _currentLine(TrackLyrics? lyrics, Duration position) {
-    if (lyrics == null || lyrics.lines.isEmpty) return null;
+    return _currentLineFrom(lyrics?.lines ?? const [], position);
+  }
+
+  SyncedLyricLine? _currentLineFrom(
+      List<SyncedLyricLine> lines, Duration position) {
+    if (lines.isEmpty) return null;
     SyncedLyricLine? result;
-    for (final line in lyrics.lines) {
+    for (final line in lines) {
       if (line.start > position) break;
       result = line;
     }
-    return result ?? lyrics.lines.first;
+    return result ?? lines.first;
+  }
+
+  Future<void> _generateEnglish(BuildContext context) async {
+    final lyrics = controller.currentLyrics;
+    if (lyrics == null || !lyrics.hasLyrics) return;
+    final timestamp = RegExp(r'^(\[[^\]]+\]\s*)(.*)$');
+    final sourceLines = lyrics.syncedLyrics.trim().isNotEmpty
+        ? lyrics.syncedLyrics.split(RegExp(r'\r?\n'))
+        : lyrics.plainLyrics.split(RegExp(r'\r?\n'));
+    final prefixes = <String>[];
+    final texts = <String>[];
+    for (final raw in sourceLines) {
+      final match = timestamp.firstMatch(raw.trim());
+      prefixes.add(match?.group(1) ?? '');
+      texts.add((match?.group(2) ?? raw).trim());
+    }
+    try {
+      final response = await http
+          .post(
+            Uri.parse('http://127.0.0.1:8765/translate'),
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'sourceLanguage': 'tel_Telu',
+              'targetLanguage': 'eng_Latn',
+              'lines': texts,
+            }),
+          )
+          .timeout(const Duration(minutes: 5));
+      if (response.statusCode != 200) {
+        throw StateError('Local translator returned ${response.statusCode}.');
+      }
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      final translated = (decoded['translations'] as List?)
+              ?.map((value) => value.toString().trim())
+              .toList() ??
+          const <String>[];
+      if (translated.length != texts.length) {
+        throw StateError('The translator returned an incomplete result.');
+      }
+      final englishSynced = List.generate(translated.length,
+          (index) => '${prefixes[index]}${translated[index]}').join('\n');
+      final englishPlain = translated.join('\n');
+      if (!context.mounted) return;
+      await _reviewEnglish(context, englishPlain, englishSynced);
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            'Start the IndicTrans2 Admin Translator on this computer, then try again. ${error.toString().replaceFirst('Bad state: ', '')}'),
+      ));
+    }
+  }
+
+  Future<void> _reviewEnglish(
+      BuildContext context, String plainValue, String syncedValue) async {
+    final synced = TextEditingController(text: syncedValue);
+    final plain = TextEditingController(text: plainValue);
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Review English lyrics for ${track.title}'),
+        content: SizedBox(
+          width: 680,
+          child: SingleChildScrollView(
+            child: Column(children: [
+              const Text(
+                  'IndicTrans2 created this draft locally. Correct names, idioms and poetic meaning before publishing.'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: synced,
+                minLines: 10,
+                maxLines: 16,
+                decoration: const InputDecoration(
+                    labelText: 'Timestamped English lyrics'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: plain,
+                minLines: 5,
+                maxLines: 10,
+                decoration:
+                    const InputDecoration(labelText: 'Plain English lyrics'),
+              ),
+            ]),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel')),
+          FilledButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              icon: const Icon(Icons.publish_rounded),
+              label: const Text('Approve & publish')),
+        ],
+      ),
+    );
+    if (save != true) return;
+    await controller.updateLyricsTranslation(track,
+        englishPlainLyrics: plain.text, englishSyncedLyrics: synced.text);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('English lyrics published.')));
+    }
   }
 
   void _showLyrics(BuildContext context) {
@@ -517,6 +651,10 @@ class _SyncedLyricsSheet extends StatelessWidget {
                       itemCount: lines.length,
                       itemBuilder: (context, index) {
                         final line = lines[index];
+                        final englishLine =
+                            index < (lyrics?.englishLines.length ?? 0)
+                                ? lyrics!.englishLines[index]
+                                : null;
                         final next = index + 1 < lines.length
                             ? lines[index + 1].start
                             : const Duration(days: 1);
@@ -532,6 +670,21 @@ class _SyncedLyricsSheet extends StatelessWidget {
                                   active ? FontWeight.w900 : FontWeight.w500,
                             ),
                           ),
+                          subtitle: englishLine == null ||
+                                  englishLine.text.trim().isEmpty
+                              ? null
+                              : Padding(
+                                  padding: const EdgeInsets.only(top: 5),
+                                  child: Text(englishLine.text,
+                                      style: TextStyle(
+                                        fontSize: active ? 17 : 15,
+                                        color: active
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                            : Colors.white60,
+                                      )),
+                                ),
                           onTap: () => controller.seekTo(line.start),
                         );
                       },

@@ -1,0 +1,4 @@
+torch>=2.4,<3
+transformers>=4.48,<5
+sentencepiece>=0.2,<1
+IndicTransToolkit>=1.1,<2
