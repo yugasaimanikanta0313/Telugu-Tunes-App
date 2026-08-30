@@ -5,6 +5,7 @@ import '../../domain/models/music_models.dart';
 import '../../state/music_controller.dart';
 import '../import/import_music_sheet.dart';
 import '../shared/widgets.dart';
+import 'playlist_detail_screen.dart';
 
 class LibraryScreen extends StatelessWidget {
   const LibraryScreen({super.key});
@@ -24,6 +25,11 @@ class LibraryScreen extends StatelessWidget {
                           .textTheme
                           .headlineMedium
                           ?.copyWith(fontWeight: FontWeight.w900))),
+              IconButton.filledTonal(
+                  onPressed: () => _showInvitations(context),
+                  tooltip: 'Playlist invitations',
+                  icon: const Icon(Icons.notifications_outlined)),
+              const SizedBox(width: 8),
               IconButton.filledTonal(
                   onPressed: () => showImportMusicSheet(context),
                   tooltip: 'Add music',
@@ -84,7 +90,11 @@ class LibraryScreen extends StatelessWidget {
                       subtitle: playlist.tracks.length.toString() + ' songs',
                       color: playlist.color,
                       imageUrl: playlist.artworkUrl,
-                      onTap: () => _showPlaylist(context, playlist),
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => PlaylistDetailScreen(
+                                  playlistId: playlist.id))),
                     )),
               ],
             ),
@@ -172,186 +182,72 @@ class LibraryScreen extends StatelessWidget {
     );
   }
 
-  void _showPlaylist(BuildContext context, Playlist playlist) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 20),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            ListTile(
-              leading: Artwork(
-                  color: playlist.color,
-                  label: playlist.name,
-                  imageUrl: playlist.artworkUrl,
-                  size: 52,
-                  icon: Icons.queue_music_rounded),
-              title: Text(playlist.name,
-                  style: const TextStyle(fontWeight: FontWeight.w900)),
-              subtitle: Text(playlist.description),
-              trailing: IconButton(
-                tooltip: 'Edit playlist',
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () {
-                  Navigator.pop(sheetContext);
-                  _editPlaylist(context, playlist);
-                },
-              ),
-            ),
-            ...playlist.tracks.map<Widget>((track) => TrackTile(
-                track: track,
-                onTap: () {
-                  context.read<MusicController>().play(track);
-                  Navigator.pop(sheetContext);
-                },
-                onMore: () => showTrackActions(context, track))),
-          ]),
-        ),
-      ),
-    );
+  Future<void> _showInvitations(BuildContext context) async {
+    final music = context.read<MusicController>();
+    await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+              title: const Row(children: [
+                Icon(Icons.notifications_active_outlined),
+                SizedBox(width: 10),
+                Text('Playlist invitations')
+              ]),
+              content: SizedBox(
+                  width: 520,
+                  child: FutureBuilder<List<PlaylistInvitation>>(
+                    future: music.getPlaylistInvitations(),
+                    builder: (_, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done)
+                        return const Center(child: CircularProgressIndicator());
+                      final invites =
+                          snapshot.data ?? const <PlaylistInvitation>[];
+                      if (invites.isEmpty)
+                        return const Padding(
+                            padding: EdgeInsets.all(24),
+                            child:
+                                Text('No pending collaboration invitations.'));
+                      return ListView(
+                          shrinkWrap: true,
+                          children: invites
+                              .map((invite) => Card(
+                                      child: ListTile(
+                                    leading: const CircleAvatar(
+                                        child: Icon(Icons.group_add_rounded)),
+                                    title: Text(invite.playlistName),
+                                    subtitle: Text(
+                                        '${invite.inviterName} invited you to collaborate.'),
+                                    trailing: Wrap(children: [
+                                      IconButton(
+                                          tooltip: 'Reject',
+                                          icon: const Icon(Icons.close_rounded),
+                                          onPressed: () async {
+                                            await music
+                                                .respondToPlaylistInvitation(
+                                                    invite.id, false);
+                                            if (dialogContext.mounted)
+                                              Navigator.pop(dialogContext);
+                                          }),
+                                      IconButton(
+                                          tooltip: 'Accept',
+                                          icon: const Icon(Icons.check_rounded),
+                                          onPressed: () async {
+                                            await music
+                                                .respondToPlaylistInvitation(
+                                                    invite.id, true);
+                                            if (dialogContext.mounted)
+                                              Navigator.pop(dialogContext);
+                                          }),
+                                    ]),
+                                  )))
+                              .toList());
+                    },
+                  )),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Close'))
+              ],
+            ));
   }
 
-  Future<void> _editPlaylist(BuildContext context, Playlist playlist) async {
-    final music = context.read<MusicController>();
-    final name = TextEditingController(text: playlist.name);
-    final description = TextEditingController(text: playlist.description);
-    final artworkUrl = TextEditingController(text: playlist.artworkUrl);
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (_, setDialogState) => AlertDialog(
-          title: const Text('Edit playlist'),
-          content: SizedBox(
-            width: 520,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Artwork(
-                    color: playlist.color,
-                    label: name.text.trim().isEmpty
-                        ? playlist.name
-                        : name.text.trim(),
-                    imageUrl: artworkUrl.text.trim(),
-                    size: 132,
-                    icon: Icons.queue_music_rounded,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: name,
-                    onChanged: (_) => setDialogState(() {}),
-                    decoration: const InputDecoration(labelText: 'Name'),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: description,
-                    maxLines: 2,
-                    decoration: const InputDecoration(labelText: 'Description'),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: artworkUrl,
-                    keyboardType: TextInputType.url,
-                    onChanged: (_) => setDialogState(() {}),
-                    decoration: const InputDecoration(
-                      labelText: 'Playlist artwork URL (optional)',
-                      helperText:
-                          'Leave empty to use the first song cover automatically.',
-                      prefixIcon: Icon(Icons.image_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        try {
-                          final queryParts = <String>[name.text];
-                          if (playlist.tracks.isNotEmpty) {
-                            queryParts.add(playlist.tracks.first.title);
-                            queryParts.add(playlist.tracks.first.artist);
-                          }
-                          final result = await music.suggestMetadata(
-                            queryParts
-                                .where((value) => value.trim().isNotEmpty)
-                                .join(' '),
-                          );
-                          if (!dialogContext.mounted) return;
-                          if (result.artworkCandidates.isEmpty) {
-                            ScaffoldMessenger.of(dialogContext).showSnackBar(
-                              const SnackBar(
-                                  content: Text('No matching cover found.')),
-                            );
-                            return;
-                          }
-                          final selected = await showArtworkPicker(
-                            dialogContext,
-                            result.artworkCandidates,
-                          );
-                          if (!dialogContext.mounted || selected == null) {
-                            return;
-                          }
-                          artworkUrl.text = selected.imageUrl;
-                          setDialogState(() {});
-                        } catch (error) {
-                          if (dialogContext.mounted) {
-                            ScaffoldMessenger.of(dialogContext).showSnackBar(
-                              SnackBar(
-                                content: Text(error
-                                    .toString()
-                                    .replaceFirst('Bad state: ', '')),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      icon: const Icon(Icons.image_search_rounded),
-                      label: const Text('Find playlist cover'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                if (name.text.trim().isEmpty) return;
-                try {
-                  await music.updatePlaylist(Playlist(
-                    id: playlist.id,
-                    name: name.text.trim(),
-                    description: description.text.trim(),
-                    color: playlist.color,
-                    artworkUrl: artworkUrl.text.trim(),
-                    tracks: playlist.tracks,
-                    isPinned: playlist.isPinned,
-                  ));
-                  if (dialogContext.mounted) Navigator.pop(dialogContext);
-                } catch (error) {
-                  if (dialogContext.mounted) {
-                    ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                            error.toString().replaceFirst('Bad state: ', '')),
-                      ),
-                    );
-                  }
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-    name.dispose();
-    description.dispose();
-    artworkUrl.dispose();
-  }
 }

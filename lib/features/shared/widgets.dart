@@ -90,25 +90,13 @@ class Artwork extends StatelessWidget {
         imageUrl: imageUrl,
         memCacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
         fadeInDuration: const Duration(milliseconds: 180),
-        imageBuilder: (_, imageProvider) => Stack(
-          fit: StackFit.expand,
-          children: [
-            Image(
-              image: imageProvider,
-              fit: BoxFit.cover,
-              color: Colors.black.withValues(alpha: .48),
-              colorBlendMode: BlendMode.darken,
-              filterQuality: FilterQuality.medium,
-            ),
-            Padding(
-              padding: EdgeInsets.all(size >= 120 ? 4 : 2),
-              child: Image(
-                image: imageProvider,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
-              ),
-            ),
-          ],
+        imageBuilder: (_, imageProvider) => ColoredBox(
+          color: colorFromHex(color).withOpacity(.18),
+          child: Image(
+            image: imageProvider,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+          ),
         ),
         placeholder: (_, __) => placeholder,
         errorWidget: (_, __, ___) => placeholder,
@@ -425,7 +413,8 @@ Future<void> showTrackActions(BuildContext context, Track track) async {
                 ListTile(
                   leading: const Icon(Icons.how_to_vote_outlined),
                   title: const Text('Suggest for a recommended playlist'),
-                  subtitle: const Text('Send an optional vote to administrators'),
+                  subtitle:
+                      const Text('Send an optional vote to administrators'),
                   onTap: () {
                     Navigator.pop(sheetContext);
                     showRecommendationVoteSheet(context, track);
@@ -550,44 +539,58 @@ Future<void> showRecommendationVoteSheet(
             20, 4, 20, MediaQuery.viewInsetsOf(context).bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Text('Vote for “${track.title}”',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800)),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
-          const Text('Choose where this song belongs. An administrator will review the result.'),
+          const Text(
+              'Choose where this song belongs. An administrator will review the result.'),
           const SizedBox(height: 16),
           DropdownButtonFormField<RecommendedPlaylist>(
             value: selected,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Recommended playlist'),
-            items: playlists.map((item) => DropdownMenuItem(
-                value: item,
-                child: Text('${item.name} • ${item.subtype}',
-                    overflow: TextOverflow.ellipsis))).toList(),
+            decoration:
+                const InputDecoration(labelText: 'Recommended playlist'),
+            items: playlists
+                .map((item) => DropdownMenuItem(
+                    value: item,
+                    child: Text('${item.name} • ${item.subtype}',
+                        overflow: TextOverflow.ellipsis)))
+                .toList(),
             onChanged: (value) => setState(() => selected = value ?? selected),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: reason,
             maxLength: 240,
-            decoration: const InputDecoration(
-                labelText: 'Why does it fit? (optional)'),
+            decoration:
+                const InputDecoration(labelText: 'Why does it fit? (optional)'),
           ),
           const SizedBox(height: 8),
-          SizedBox(width: double.infinity, child: FilledButton.icon(
-            icon: const Icon(Icons.how_to_vote_rounded),
-            label: const Text('Submit vote'),
-            onPressed: () async {
-              try {
-                await music.voteForRecommendation(track, selected, reason.text);
-                if (sheetContext.mounted) Navigator.pop(sheetContext);
-                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Vote sent for administrator review.')));
-              } catch (error) {
-                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(error.toString().replaceFirst('Bad state: ', ''))));
-              }
-            },
-          )),
+          SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                icon: const Icon(Icons.how_to_vote_rounded),
+                label: const Text('Submit vote'),
+                onPressed: () async {
+                  try {
+                    await music.voteForRecommendation(
+                        track, selected, reason.text);
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
+                    if (context.mounted)
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content:
+                              Text('Vote sent for administrator review.')));
+                  } catch (error) {
+                    if (context.mounted)
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(error
+                              .toString()
+                              .replaceFirst('Bad state: ', ''))));
+                  }
+                },
+              )),
         ]),
       ),
     ),

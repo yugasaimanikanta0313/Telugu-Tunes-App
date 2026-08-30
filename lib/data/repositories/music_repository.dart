@@ -35,6 +35,11 @@ abstract class MusicRepository {
   Future<Playlist> createPlaylist(String name);
   Future<Playlist> updatePlaylist(Playlist playlist);
   Future<Playlist> addTrackToPlaylist(String playlistId, Track track);
+  Future<List<PlaylistInvitation>> getPlaylistInvitations();
+  Future<PlaylistInvitation> invitePlaylistCollaborator(
+      String playlistId, String email);
+  Future<PlaylistInvitation> respondToPlaylistInvitation(
+      String invitationId, bool accept);
   Future<Album> updateAlbum(Album album);
   Future<void> deleteAlbum(String albumId);
   Future<Track> updateTrack(Track track);
@@ -157,6 +162,17 @@ class SpringBootMusicRepository implements MusicRepository {
   @override
   Future<Playlist> addTrackToPlaylist(String playlistId, Track track) =>
       _api.addTrackToPlaylist(playlistId, track.id);
+  @override
+  Future<List<PlaylistInvitation>> getPlaylistInvitations() =>
+      _api.getPlaylistInvitations();
+  @override
+  Future<PlaylistInvitation> invitePlaylistCollaborator(
+          String playlistId, String email) =>
+      _api.invitePlaylistCollaborator(playlistId, email);
+  @override
+  Future<PlaylistInvitation> respondToPlaylistInvitation(
+          String invitationId, bool accept) =>
+      _api.respondToPlaylistInvitation(invitationId, accept);
   @override
   Future<Album> updateAlbum(Album album) => _api.updateAlbum(album);
   @override
@@ -518,6 +534,31 @@ class MockMusicRepository implements MusicRepository {
     );
     return playlist.copyWith(tracks: [...playlist.tracks, track]);
   }
+
+  @override
+  Future<List<PlaylistInvitation>> getPlaylistInvitations() async => const [];
+
+  @override
+  Future<PlaylistInvitation> invitePlaylistCollaborator(
+          String playlistId, String email) async =>
+      PlaylistInvitation(
+          id: 'mock-invite',
+          playlistId: playlistId,
+          playlistName: 'Playlist',
+          inviterName: 'You',
+          status: 'PENDING',
+          createdAt: DateTime.now());
+
+  @override
+  Future<PlaylistInvitation> respondToPlaylistInvitation(
+          String invitationId, bool accept) async =>
+      PlaylistInvitation(
+          id: invitationId,
+          playlistId: '',
+          playlistName: 'Playlist',
+          inviterName: 'Member',
+          status: accept ? 'ACCEPTED' : 'REJECTED',
+          createdAt: DateTime.now());
 
   @override
   Future<Album> updateAlbum(Album album) async => album;

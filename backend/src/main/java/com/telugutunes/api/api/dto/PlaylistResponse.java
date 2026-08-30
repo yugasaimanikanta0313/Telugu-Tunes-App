@@ -9,4 +9,5 @@ public record PlaylistResponse(
     String color,
     String artworkUrl,
     List<TrackResponse> tracks,
-    List<String> sharedWithMemberIds) {}
+    List<String> sharedWithMemberIds,
+    String ownerMemberId) {}

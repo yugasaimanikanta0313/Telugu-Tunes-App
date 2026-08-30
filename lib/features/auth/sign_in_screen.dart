@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/services/api_music_service.dart';
+import 'forgot_password_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key, required this.onAuthenticated});
@@ -134,6 +135,17 @@ class _SignInScreenState extends State<SignInScreen> {
                           ? 'Already have an account? Sign in'
                           : 'New here? Create an account'),
                     ),
+                    if (!_registering)
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => ForgotPasswordScreen(
+                                        initialEmail: _email.text.trim()))),
+                        child: const Text('Forgot password?'),
+                      ),
                   ],
                 ),
               ),

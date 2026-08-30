@@ -6,4 +6,6 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface AuthSessionRepository extends MongoRepository<AuthSessionDocument, String> {
   Optional<AuthSessionDocument> findByTokenHash(String tokenHash);
+
+  void deleteByMemberId(String memberId);
 }

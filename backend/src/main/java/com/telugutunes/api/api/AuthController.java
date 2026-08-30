@@ -4,6 +4,12 @@ import com.telugutunes.api.api.dto.AuthResponse;
 import com.telugutunes.api.api.dto.LoginRequest;
 import com.telugutunes.api.api.dto.RegisterRequest;
 import com.telugutunes.api.service.AuthService;
+import com.telugutunes.api.service.PasswordResetService;
+import com.telugutunes.api.api.dto.ForgotPasswordRequest;
+import com.telugutunes.api.api.dto.PasswordResetMessageResponse;
+import com.telugutunes.api.api.dto.ResetPasswordRequest;
+import com.telugutunes.api.api.dto.VerifyResetOtpRequest;
+import com.telugutunes.api.api.dto.VerifyResetOtpResponse;
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Duration;
@@ -20,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
   private final AuthService auth;
+  private final PasswordResetService passwordResets;
 
-  public AuthController(AuthService auth) {
+  public AuthController(AuthService auth, PasswordResetService passwordResets) {
     this.auth = auth;
+    this.passwordResets = passwordResets;
   }
 
   @PostMapping("/register")
@@ -39,6 +47,23 @@ public class AuthController {
     var session = auth.login(request);
     setBrowserSessionCookie(response, session.token());
     return session;
+  }
+
+  @PostMapping("/forgot-password")
+  public PasswordResetMessageResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+    passwordResets.request(request.email());
+    return new PasswordResetMessageResponse("If that account exists, a six-digit code has been sent.");
+  }
+
+  @PostMapping("/verify-reset-otp")
+  public VerifyResetOtpResponse verifyResetOtp(@Valid @RequestBody VerifyResetOtpRequest request) {
+    return new VerifyResetOtpResponse(passwordResets.verify(request));
+  }
+
+  @PostMapping("/reset-password")
+  public PasswordResetMessageResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+    passwordResets.reset(request);
+    return new PasswordResetMessageResponse("Password updated. Sign in with your new password.");
   }
 
   private void setBrowserSessionCookie(HttpServletResponse response, String token) {

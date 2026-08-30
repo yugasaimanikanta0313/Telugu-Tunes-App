@@ -3,6 +3,9 @@ package com.telugutunes.api.api;
 import com.telugutunes.api.api.dto.CreatePlaylistRequest;
 import com.telugutunes.api.api.dto.PlaylistResponse;
 import com.telugutunes.api.service.PlaylistService;
+import com.telugutunes.api.service.PlaylistInvitationService;
+import com.telugutunes.api.api.dto.CreatePlaylistInvitationRequest;
+import com.telugutunes.api.api.dto.PlaylistInvitationResponse;
 import com.telugutunes.api.config.AuthenticationFilter;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -21,9 +24,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/playlists")
 public class PlaylistsController {
   private final PlaylistService playlists;
+  private final PlaylistInvitationService invitations;
 
-  public PlaylistsController(PlaylistService playlists) {
+  public PlaylistsController(PlaylistService playlists, PlaylistInvitationService invitations) {
     this.playlists = playlists;
+    this.invitations = invitations;
   }
 
   @GetMapping
@@ -53,5 +58,34 @@ public class PlaylistsController {
       @PathVariable String playlistId,
       @Valid @RequestBody CreatePlaylistRequest request) {
     return playlists.update(memberId, playlistId, request);
+  }
+
+  @PostMapping("/{playlistId}/invitations")
+  @ResponseStatus(HttpStatus.CREATED)
+  public PlaylistInvitationResponse invite(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
+      @PathVariable String playlistId,
+      @Valid @RequestBody CreatePlaylistInvitationRequest request) {
+    return invitations.invite(memberId, playlistId, request.email());
+  }
+
+  @GetMapping("/invitations")
+  public List<PlaylistInvitationResponse> invitations(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId) {
+    return invitations.pending(memberId);
+  }
+
+  @PostMapping("/invitations/{invitationId}/accept")
+  public PlaylistInvitationResponse accept(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
+      @PathVariable String invitationId) {
+    return invitations.respond(memberId, invitationId, true);
+  }
+
+  @PostMapping("/invitations/{invitationId}/reject")
+  public PlaylistInvitationResponse reject(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
+      @PathVariable String invitationId) {
+    return invitations.respond(memberId, invitationId, false);
   }
 }

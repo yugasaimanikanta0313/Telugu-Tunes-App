@@ -1018,6 +1018,20 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<List<PlaylistInvitation>> getPlaylistInvitations() =>
+      _repository.getPlaylistInvitations();
+
+  Future<void> invitePlaylistCollaborator(
+      String playlistId, String email) async {
+    await _repository.invitePlaylistCollaborator(playlistId, email);
+  }
+
+  Future<void> respondToPlaylistInvitation(
+      String invitationId, bool accept) async {
+    await _repository.respondToPlaylistInvitation(invitationId, accept);
+    if (accept) await load();
+  }
+
   Future<List<RecommendedPlaylist>> getAdminRecommendedPlaylists() =>
       _repository.getRecommendedPlaylists(admin: true);
 

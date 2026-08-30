@@ -110,6 +110,7 @@ public class PlaylistService {
         playlist.artworkColor(),
         artworkUrl,
         tracks,
-        playlist.sharedWithMemberIds());
+        playlist.sharedWithMemberIds(),
+        playlist.ownerMemberId());
   }
 }

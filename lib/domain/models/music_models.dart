@@ -145,6 +145,8 @@ class Playlist {
     required this.tracks,
     this.artworkUrl = '',
     this.isPinned = false,
+    this.ownerMemberId = '',
+    this.sharedWithMemberIds = const [],
   });
 
   final String id;
@@ -154,6 +156,8 @@ class Playlist {
   final String artworkUrl;
   final List<Track> tracks;
   final bool isPinned;
+  final String ownerMemberId;
+  final List<String> sharedWithMemberIds;
 
   Playlist copyWith({List<Track>? tracks}) => Playlist(
         id: id,
@@ -163,7 +167,25 @@ class Playlist {
         artworkUrl: artworkUrl,
         tracks: tracks ?? this.tracks,
         isPinned: isPinned,
+        ownerMemberId: ownerMemberId,
+        sharedWithMemberIds: sharedWithMemberIds,
       );
+}
+
+class PlaylistInvitation {
+  const PlaylistInvitation(
+      {required this.id,
+      required this.playlistId,
+      required this.playlistName,
+      required this.inviterName,
+      required this.status,
+      required this.createdAt});
+  final String id;
+  final String playlistId;
+  final String playlistName;
+  final String inviterName;
+  final String status;
+  final DateTime createdAt;
 }
 
 class RecommendedPlaylist {

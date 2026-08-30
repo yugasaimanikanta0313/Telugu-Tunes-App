@@ -41,10 +41,19 @@ abstract class MusicApiService {
     required String password,
   });
   Future<ApiSession> login({required String email, required String password});
+  Future<void> requestPasswordReset(String email);
+  Future<String> verifyPasswordResetOtp(String email, String otp);
+  Future<void> resetPassword(
+      String email, String resetToken, String newPassword);
   Future<MemberProfile> getProfile();
   Future<Playlist> createPlaylist(String name);
   Future<Playlist> updatePlaylist(Playlist playlist);
   Future<Playlist> addTrackToPlaylist(String playlistId, String trackId);
+  Future<List<PlaylistInvitation>> getPlaylistInvitations();
+  Future<PlaylistInvitation> invitePlaylistCollaborator(
+      String playlistId, String email);
+  Future<PlaylistInvitation> respondToPlaylistInvitation(
+      String invitationId, bool accept);
   Future<Album> updateAlbum(Album album);
   Future<void> deleteAlbum(String albumId);
   Future<Track> updateTrack(Track track);
@@ -355,6 +364,28 @@ class SpringBootMusicApiService implements MusicApiService {
       _authenticate('/auth/login', {'email': email, 'password': password});
 
   @override
+  Future<void> requestPasswordReset(String email) async {
+    await _postMap('/auth/forgot-password', {'email': email});
+  }
+
+  @override
+  Future<String> verifyPasswordResetOtp(String email, String otp) async {
+    final result =
+        await _postMap('/auth/verify-reset-otp', {'email': email, 'otp': otp});
+    return result['resetToken'] as String;
+  }
+
+  @override
+  Future<void> resetPassword(
+      String email, String resetToken, String newPassword) async {
+    await _postMap('/auth/reset-password', {
+      'email': email,
+      'resetToken': resetToken,
+      'newPassword': newPassword,
+    });
+  }
+
+  @override
   Future<MemberProfile> getProfile() async {
     final json = await _getMap('/profile');
     return MemberProfile(
@@ -389,6 +420,25 @@ class SpringBootMusicApiService implements MusicApiService {
           String playlistId, String trackId) async =>
       _playlist(await _postMap(
           '/playlists/$playlistId/tracks/$trackId', const <String, dynamic>{}));
+
+  @override
+  Future<List<PlaylistInvitation>> getPlaylistInvitations() async =>
+      (await _getList('/playlists/invitations'))
+          .map(_playlistInvitation)
+          .toList();
+
+  @override
+  Future<PlaylistInvitation> invitePlaylistCollaborator(
+          String playlistId, String email) async =>
+      _playlistInvitation(await _postMap(
+          '/playlists/$playlistId/invitations', {'email': email}));
+
+  @override
+  Future<PlaylistInvitation> respondToPlaylistInvitation(
+          String invitationId, bool accept) async =>
+      _playlistInvitation(await _postMap(
+          '/playlists/invitations/$invitationId/${accept ? 'accept' : 'reject'}',
+          const {}));
 
   @override
   Future<Album> updateAlbum(Album album) async => _album(
@@ -834,6 +884,20 @@ class SpringBootMusicApiService implements MusicApiService {
         color: json['color'] as String,
         artworkUrl: json['artworkUrl'] as String? ?? '',
         tracks: _list(json['tracks']).map(_track).toList(),
+        ownerMemberId: json['ownerMemberId'] as String? ?? '',
+        sharedWithMemberIds: _list(json['sharedWithMemberIds'])
+            .map((v) => v.toString())
+            .toList(),
+      );
+
+  PlaylistInvitation _playlistInvitation(Map<String, dynamic> json) =>
+      PlaylistInvitation(
+        id: json['id'] as String,
+        playlistId: json['playlistId'] as String,
+        playlistName: json['playlistName'] as String,
+        inviterName: json['inviterName'] as String,
+        status: json['status'] as String,
+        createdAt: DateTime.parse(json['createdAt'] as String),
       );
 
   RecommendedPlaylist _recommendedPlaylist(Map<String, dynamic> json) =>
