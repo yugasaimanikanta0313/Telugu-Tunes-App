@@ -904,6 +904,8 @@ class SpringBootMusicApiService implements MusicApiService {
         sharedWithMemberIds: _list(json['sharedWithMemberIds'])
             .map((v) => v.toString())
             .toList(),
+        trackAddedByNames: (json['trackAddedByNames'] as Map? ?? const {})
+            .map((key, value) => MapEntry(key.toString(), value.toString())),
       );
 
   PlaylistInvitation _playlistInvitation(Map<String, dynamic> json) =>

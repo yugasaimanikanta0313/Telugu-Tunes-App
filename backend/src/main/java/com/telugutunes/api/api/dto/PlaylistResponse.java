@@ -1,6 +1,7 @@
 package com.telugutunes.api.api.dto;
 
 import java.util.List;
+import java.util.Map;
 
 public record PlaylistResponse(
     String id,
@@ -10,4 +11,5 @@ public record PlaylistResponse(
     String artworkUrl,
     List<TrackResponse> tracks,
     List<String> sharedWithMemberIds,
-    String ownerMemberId) {}
+    String ownerMemberId,
+    Map<String, String> trackAddedByNames) {}

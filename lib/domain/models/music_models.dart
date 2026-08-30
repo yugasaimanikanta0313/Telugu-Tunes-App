@@ -147,6 +147,7 @@ class Playlist {
     this.isPinned = false,
     this.ownerMemberId = '',
     this.sharedWithMemberIds = const [],
+    this.trackAddedByNames = const {},
   });
 
   final String id;
@@ -158,6 +159,7 @@ class Playlist {
   final bool isPinned;
   final String ownerMemberId;
   final List<String> sharedWithMemberIds;
+  final Map<String, String> trackAddedByNames;
 
   Playlist copyWith({List<Track>? tracks}) => Playlist(
         id: id,
@@ -169,6 +171,7 @@ class Playlist {
         isPinned: isPinned,
         ownerMemberId: ownerMemberId,
         sharedWithMemberIds: sharedWithMemberIds,
+        trackAddedByNames: trackAddedByNames,
       );
 }
 

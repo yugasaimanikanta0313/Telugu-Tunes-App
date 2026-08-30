@@ -3,27 +3,49 @@ package com.telugutunes.api.service;
 import com.telugutunes.api.api.dto.CreatePlaylistRequest;
 import com.telugutunes.api.api.dto.PlaylistResponse;
 import com.telugutunes.api.domain.PlaylistDocument;
+import com.telugutunes.api.domain.PlaylistTrackContributionDocument;
 import com.telugutunes.api.exception.NotFoundException;
 import com.telugutunes.api.repository.PlaylistRepository;
+import com.telugutunes.api.repository.PlaylistInvitationRepository;
+import com.telugutunes.api.repository.PlaylistTrackContributionRepository;
+import com.telugutunes.api.repository.MemberRepository;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 
 @Service
 public class PlaylistService {
   private final PlaylistRepository playlists;
   private final CatalogService catalog;
+  private final PlaylistInvitationRepository invitations;
+  private final PlaylistTrackContributionRepository contributions;
+  private final MemberRepository members;
 
-  public PlaylistService(PlaylistRepository playlists, CatalogService catalog) {
+  public PlaylistService(
+      PlaylistRepository playlists,
+      CatalogService catalog,
+      PlaylistInvitationRepository invitations,
+      PlaylistTrackContributionRepository contributions,
+      MemberRepository members) {
     this.playlists = playlists;
     this.catalog = catalog;
+    this.invitations = invitations;
+    this.contributions = contributions;
+    this.members = members;
   }
 
   public List<PlaylistResponse> list(String memberId) {
-    return playlists.findByOwnerMemberIdOrSharedWithMemberIdsContains(memberId, memberId).stream()
-        .map(this::response)
-        .toList();
+    var accessible = new LinkedHashMap<String, PlaylistDocument>();
+    playlists.findByOwnerMemberIdOrSharedWithMemberIdsContains(memberId, memberId)
+        .forEach(value -> accessible.put(value.id(), value));
+    invitations.findByInviteeMemberIdAndStatusOrderByCreatedAtDesc(memberId, "ACCEPTED")
+        .forEach(invitation -> playlists.findById(invitation.playlistId())
+            .ifPresent(value -> accessible.put(value.id(), value)));
+    return accessible.values().stream().map(this::response).toList();
   }
 
   public PlaylistResponse create(String memberId, CreatePlaylistRequest request) {
@@ -47,8 +69,7 @@ public class PlaylistService {
   public PlaylistResponse addTrack(String memberId, String playlistId, String trackId) {
     var playlist =
         playlists.findById(playlistId).orElseThrow(() -> new NotFoundException("Playlist not found."));
-    if (!playlist.ownerMemberId().equals(memberId)
-        && !playlist.sharedWithMemberIds().contains(memberId)) {
+    if (!hasWriteAccess(playlist, memberId)) {
       throw new IllegalArgumentException("This member cannot change the playlist.");
     }
     catalog.trackDocument(trackId);
@@ -56,19 +77,24 @@ public class PlaylistService {
     if (!ids.contains(trackId)) {
       ids.add(trackId);
     }
-    return response(
-        playlists.save(
-            new PlaylistDocument(
-                playlist.id(),
-                playlist.ownerMemberId(),
-                playlist.name(),
-                playlist.description(),
-                playlist.artworkColor(),
-                playlist.artworkUrl(),
-                ids,
-                playlist.sharedWithMemberIds(),
-                playlist.createdAt(),
-                Instant.now())));
+    var saved = playlists.save(
+        new PlaylistDocument(
+            playlist.id(),
+            playlist.ownerMemberId(),
+            playlist.name(),
+            playlist.description(),
+            playlist.artworkColor(),
+            playlist.artworkUrl(),
+            ids,
+            playlist.sharedWithMemberIds(),
+            playlist.createdAt(),
+            Instant.now()));
+    if (!playlist.trackIds().contains(trackId)
+        && contributions.findByPlaylistIdAndTrackId(playlistId, trackId).isEmpty()) {
+      contributions.save(new PlaylistTrackContributionDocument(
+          null, playlistId, trackId, memberId, Instant.now()));
+    }
+    return response(saved);
   }
 
   public PlaylistResponse update(
@@ -111,6 +137,30 @@ public class PlaylistService {
         artworkUrl,
         tracks,
         playlist.sharedWithMemberIds(),
-        playlist.ownerMemberId());
+        playlist.ownerMemberId(),
+        contributionNames(playlist));
+  }
+
+  private boolean hasWriteAccess(PlaylistDocument playlist, String memberId) {
+    if (playlist.ownerMemberId().equals(memberId)
+        || playlist.sharedWithMemberIds().contains(memberId)) return true;
+    return invitations.findByPlaylistIdAndInviteeMemberIdAndStatus(
+        playlist.id(), memberId, "ACCEPTED").isPresent();
+  }
+
+  private Map<String, String> contributionNames(PlaylistDocument playlist) {
+    var memberByTrack = new LinkedHashMap<String, String>();
+    playlist.trackIds().forEach(trackId -> memberByTrack.put(trackId, playlist.ownerMemberId()));
+    contributions.findByPlaylistId(playlist.id())
+        .forEach(value -> memberByTrack.put(value.trackId(), value.memberId()));
+
+    var memberIds = new LinkedHashSet<>(memberByTrack.values());
+    var names = new LinkedHashMap<String, String>();
+    members.findAllById(memberIds).forEach(member -> names.put(member.id(), member.displayName()));
+
+    var result = new LinkedHashMap<String, String>();
+    memberByTrack.forEach((trackId, memberId) ->
+        result.put(trackId, names.getOrDefault(memberId, "Playlist member")));
+    return result;
   }
 }

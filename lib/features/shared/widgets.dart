@@ -226,6 +226,7 @@ class TrackTile extends StatelessWidget {
     this.onTap,
     this.onMore,
     this.showAlbum = true,
+    this.subtitle,
   });
 
   final Track track;
@@ -233,6 +234,7 @@ class TrackTile extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onMore;
   final bool showAlbum;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -259,7 +261,8 @@ class TrackTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w700)),
       subtitle: Text(
-          showAlbum ? track.artist + ' • ' + track.album : track.artist,
+          subtitle ??
+              (showAlbum ? track.artist + ' • ' + track.album : track.artist),
           maxLines: 1,
           overflow: TextOverflow.ellipsis),
       onTap: onTap,

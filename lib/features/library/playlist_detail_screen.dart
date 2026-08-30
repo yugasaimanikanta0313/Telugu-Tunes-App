@@ -94,6 +94,8 @@ class PlaylistDetailScreen extends StatelessWidget {
                 return TrackTile(
                     track: track,
                     index: index + 1,
+                    subtitle:
+                        'Added by ${playlist.trackAddedByNames[track.id] ?? 'Playlist owner'} • ${track.artist} • ${track.album}',
                     onTap: () => music.play(track),
                     onMore: () => showTrackActions(context, track));
               }),
@@ -192,8 +194,8 @@ class PlaylistDetailScreen extends StatelessWidget {
                               tracks: playlist.tracks,
                               isPinned: playlist.isPinned,
                               ownerMemberId: playlist.ownerMemberId,
-                              sharedWithMemberIds:
-                                  playlist.sharedWithMemberIds));
+                              sharedWithMemberIds: playlist.sharedWithMemberIds,
+                              trackAddedByNames: playlist.trackAddedByNames));
                       if (dialogContext.mounted) Navigator.pop(dialogContext);
                     },
                     child: const Text('Save')),
