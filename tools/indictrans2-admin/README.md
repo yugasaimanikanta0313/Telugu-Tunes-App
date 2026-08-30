@@ -6,14 +6,13 @@ the admin computer until the reviewed result is published to Telugu Tunes.
 
 ## First-time setup
 
-1. Install 64-bit Python 3.9–3.12. The setup automatically uses the compatible
-   Miniconda Python already present on the current admin computer.
+1. Install and start Docker Desktop with Linux containers enabled.
 2. Open PowerShell in this folder.
 3. Run `powershell -ExecutionPolicy Bypass -File .\setup-and-run.ps1`.
 4. Keep the window open and use **Generate English** in the Telugu Tunes admin
    lyrics panel.
 
-The first installation and first model download are large and can take time.
+The first container build and first model download are large and can take time.
 The computer should have at least 8 GB RAM; 16 GB is preferable. The Oracle
 server does not run this model.
 
