@@ -85,7 +85,7 @@ class LibraryScreen extends StatelessWidget {
                         ]),
                   ),
                 ),
-                ...controller.playlists.map((playlist) => CollectionCard(
+                ...controller.ownedPlaylists.map((playlist) => CollectionCard(
                       title: playlist.name,
                       subtitle: playlist.tracks.length.toString() + ' songs',
                       color: playlist.color,
@@ -100,6 +100,35 @@ class LibraryScreen extends StatelessWidget {
             ),
           ),
         ),
+        if (controller.collaborativePlaylists.isNotEmpty) ...[
+          const SliverToBoxAdapter(
+              child: SectionTitle(title: 'Collaborative playlists')),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 206,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(left: 20),
+                children: controller.collaborativePlaylists
+                    .map((playlist) => CollectionCard(
+                          title: playlist.name,
+                          subtitle:
+                              '${playlist.tracks.length} songs • Shared with you',
+                          color: playlist.color,
+                          imageUrl: playlist.artworkUrl,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  PlaylistDetailScreen(playlistId: playlist.id),
+                            ),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ),
+          ),
+        ],
         const SliverToBoxAdapter(
             child: SectionTitle(title: 'Favorites', action: 'Play all')),
         if (controller.favoriteTracks.isEmpty)
@@ -207,39 +236,27 @@ class LibraryScreen extends StatelessWidget {
                             child:
                                 Text('No pending collaboration invitations.'));
                       return ListView(
-                          shrinkWrap: true,
-                          children: invites
-                              .map((invite) => Card(
-                                      child: ListTile(
-                                    leading: const CircleAvatar(
-                                        child: Icon(Icons.group_add_rounded)),
-                                    title: Text(invite.playlistName),
-                                    subtitle: Text(
-                                        '${invite.inviterName} invited you to collaborate.'),
-                                    trailing: Wrap(children: [
-                                      IconButton(
-                                          tooltip: 'Reject',
-                                          icon: const Icon(Icons.close_rounded),
-                                          onPressed: () async {
-                                            await music
-                                                .respondToPlaylistInvitation(
-                                                    invite.id, false);
-                                            if (dialogContext.mounted)
-                                              Navigator.pop(dialogContext);
-                                          }),
-                                      IconButton(
-                                          tooltip: 'Accept',
-                                          icon: const Icon(Icons.check_rounded),
-                                          onPressed: () async {
-                                            await music
-                                                .respondToPlaylistInvitation(
-                                                    invite.id, true);
-                                            if (dialogContext.mounted)
-                                              Navigator.pop(dialogContext);
-                                          }),
-                                    ]),
-                                  )))
-                              .toList());
+                        shrinkWrap: true,
+                        children: invites
+                            .map((invite) => _InvitationCard(
+                                  invitation: invite,
+                                  onReject: () async {
+                                    await music.respondToPlaylistInvitation(
+                                        invite.id, false);
+                                    if (dialogContext.mounted) {
+                                      Navigator.pop(dialogContext);
+                                    }
+                                  },
+                                  onAccept: () async {
+                                    await music.respondToPlaylistInvitation(
+                                        invite.id, true);
+                                    if (dialogContext.mounted) {
+                                      Navigator.pop(dialogContext);
+                                    }
+                                  },
+                                ))
+                            .toList(),
+                      );
                     },
                   )),
               actions: [
@@ -249,5 +266,69 @@ class LibraryScreen extends StatelessWidget {
               ],
             ));
   }
+}
 
+class _InvitationCard extends StatelessWidget {
+  const _InvitationCard({
+    required this.invitation,
+    required this.onReject,
+    required this.onAccept,
+  });
+
+  final PlaylistInvitation invitation;
+  final Future<void> Function() onReject;
+  final Future<void> Function() onAccept;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const CircleAvatar(child: Icon(Icons.group_add_rounded)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(invitation.playlistName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${invitation.inviterName} invited you to collaborate.',
+                          softWrap: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: onReject,
+                    icon: const Icon(Icons.close_rounded),
+                    label: const Text('Reject'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: onAccept,
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text('Accept'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
 }
