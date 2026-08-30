@@ -6,7 +6,8 @@ the admin computer until the reviewed result is published to Telugu Tunes.
 
 ## First-time setup
 
-1. Install 64-bit Python 3.11.
+1. Install 64-bit Python 3.9–3.12. The setup automatically uses the compatible
+   Miniconda Python already present on the current admin computer.
 2. Open PowerShell in this folder.
 3. Run `powershell -ExecutionPolicy Bypass -File .\setup-and-run.ps1`.
 4. Keep the window open and use **Generate English** in the Telugu Tunes admin
