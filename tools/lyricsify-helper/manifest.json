@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Telugu Tunes Lyrics Helper",
-  "version": "1.0.0",
-  "description": "Review LRC visible on a Lyricsify page and save it to the exact Telugu Tunes track.",
+  "name": "Telugu Tunes Admin Helper",
+  "version": "1.1.0",
+  "description": "Review synced lyrics or import authorized direct audio into Telugu Tunes.",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [
     "https://www.lyricsify.com/*",
@@ -11,8 +11,9 @@
     "https://telugu-tunes-app.onrender.com/*",
     "http://localhost:8080/*"
   ],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "action": {
-    "default_title": "Send lyrics to Telugu Tunes",
+    "default_title": "Telugu Tunes admin helper",
     "default_popup": "popup.html"
   }
 }

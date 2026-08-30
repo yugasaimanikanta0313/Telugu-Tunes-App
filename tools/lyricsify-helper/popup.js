@@ -14,6 +14,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   el('extract').addEventListener('click', extract);
   el('search').addEventListener('click', searchTracks);
   el('save').addEventListener('click', saveLyrics);
+  el('detectAudio').addEventListener('click', detectAudio);
+  el('audioLinks').addEventListener('change', chooseDetectedAudio);
+  el('rightsConfirmed').addEventListener('change', updateImportButton);
+  el('importAudio').addEventListener('click', importAudio);
 });
 
 function api(path) {
@@ -49,6 +53,134 @@ function renderAccount() {
   el('signedOut').hidden = Boolean(token);
   el('signedIn').hidden = !token;
   el('account').textContent = member ? `${member.name}${member.admin ? ' • admin' : ''}` : '';
+  updateImportButton();
+}
+
+function updateImportButton() {
+  el('importAudio').disabled = !token || member?.admin !== true || !el('audioLinks').value || !el('rightsConfirmed').checked;
+}
+
+async function detectAudio() {
+  setStatus('Scanning the open page for direct audio links…');
+  try {
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    if (!tab?.id || !/^https?:/i.test(tab.url || '')) throw new Error('Open an authorized HTTP or HTTPS source page first.');
+    const [{result}] = await chrome.scripting.executeScript({target: {tabId: tab.id}, func: extractAuthorizedAudioCandidates});
+    const candidates = result?.candidates || [];
+    el('audioLinks').replaceChildren(new Option('Choose an authorized audio file', ''));
+    for (const candidate of candidates) {
+      const option = new Option(candidate.label, candidate.url);
+      option.dataset.fileName = candidate.fileName;
+      el('audioLinks').append(option);
+    }
+    const metadata = result?.metadata || {};
+    el('audioTitle').value = metadata.title || '';
+    el('audioArtist').value = metadata.artist || '';
+    el('audioAlbum').value = metadata.album || '';
+    el('audioArtwork').value = metadata.artwork || '';
+    el('rightsConfirmed').checked = false;
+    updateImportButton();
+    setStatus(candidates.length
+      ? `Found ${candidates.length} direct audio candidate(s). Choose one and review every field.`
+      : 'No direct audio link was detected. Protected players and indirect download pages are not supported.', !candidates.length);
+  } catch (error) { setStatus(error.message, true); }
+}
+
+function chooseDetectedAudio() {
+  const option = el('audioLinks').selectedOptions[0];
+  if (!el('audioTitle').value && option?.dataset.fileName) {
+    el('audioTitle').value = option.dataset.fileName.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+  }
+  el('rightsConfirmed').checked = false;
+  updateImportButton();
+}
+
+async function importAudio() {
+  if (!token || member?.admin !== true) return setStatus('Sign in with an administrator account first.', true);
+  const sourceUrl = el('audioLinks').value;
+  if (!sourceUrl) return setStatus('Choose a direct audio source.', true);
+  if (!el('rightsConfirmed').checked) return setStatus('Confirm your ownership or import permission first.', true);
+  const title = el('audioTitle').value.trim();
+  if (!title) return setStatus('Review and enter the song title.', true);
+  const artist = el('audioArtist').value.trim();
+  if (!confirm(`Import “${title}${artist ? ` — ${artist}` : ''}”?\n\nYou are confirming that you have permission to copy this audio.`)) return;
+
+  const originPattern = new URL(sourceUrl).origin + '/*';
+  const granted = await chrome.permissions.request({origins: [originPattern]});
+  if (!granted) return setStatus('Permission to read the selected audio host was not granted.', true);
+
+  el('importProgress').hidden = false;
+  el('importProgress').removeAttribute('value');
+  el('importAudio').disabled = true;
+  setStatus('Downloading the selected authorized audio…');
+  try {
+    const response = await fetch(sourceUrl, {credentials: 'omit', redirect: 'follow'});
+    if (!response.ok) throw new Error(`Audio download failed (${response.status}).`);
+    const contentType = (response.headers.get('content-type') || '').split(';')[0].toLowerCase();
+    const length = Number(response.headers.get('content-length') || 0);
+    if (length > 50 * 1024 * 1024) throw new Error('The audio exceeds the 50 MB upload limit.');
+    if (contentType.startsWith('text/') || contentType.includes('html') || contentType.includes('json')) {
+      throw new Error('The selected link returned a web page instead of an audio file, so it was rejected.');
+    }
+    if (!contentType.startsWith('audio/') && !hasAudioExtension(response.url || sourceUrl)) {
+      throw new Error('The selected link returned a web page or non-audio file, so it was rejected.');
+    }
+    const blob = await response.blob();
+    if (!blob.size) throw new Error('The selected audio file is empty.');
+    if (blob.size > 50 * 1024 * 1024) throw new Error('The audio exceeds the 50 MB upload limit.');
+    if (blob.type && (blob.type.startsWith('text/') || blob.type.includes('html') || blob.type.includes('json'))) {
+      throw new Error('The downloaded content is a web document, not audio.');
+    }
+    if (blob.type && !blob.type.startsWith('audio/') && !hasAudioExtension(response.url || sourceUrl)) {
+      throw new Error('The downloaded content is not a supported audio file.');
+    }
+
+    const selected = el('audioLinks').selectedOptions[0];
+    const pathName = new URL(response.url || sourceUrl).pathname.split('/').pop();
+    const fileName = safeAudioFileName(selected?.dataset.fileName || pathName || `${title}.mp3`, contentType);
+    const form = new FormData();
+    form.append('file', blob, fileName);
+    appendField(form, 'title', title);
+    appendField(form, 'artist', el('audioArtist').value);
+    appendField(form, 'album', el('audioAlbum').value);
+    appendField(form, 'singers', el('audioSingers').value);
+    appendField(form, 'musicDirector', el('audioDirector').value);
+    appendField(form, 'genre', el('audioGenre').value);
+    appendField(form, 'artworkUrl', el('audioArtwork').value);
+    appendField(form, 'sourceUrl', sourceUrl);
+    setStatus(`Uploading reviewed audio (${formatBytes(blob.size)})…`);
+    const upload = await fetch(api('/imports/audio'), {method: 'POST', headers: {'Authorization': `Bearer ${token}`}, body: form});
+    const data = await json(upload);
+    el('importProgress').value = 100;
+    setStatus(data.message || `Imported “${title}” successfully.`);
+    el('rightsConfirmed').checked = false;
+  } catch (error) {
+    el('importProgress').hidden = true;
+    setStatus(error.message, true);
+  } finally { updateImportButton(); }
+}
+
+function appendField(form, name, input) {
+  const value = typeof input === 'string' ? input.trim() : '';
+  if (value) form.append(name, value);
+}
+
+function hasAudioExtension(value) {
+  try { return /\.(?:mp3|m4a|aac|ogg|oga|wav|flac|opus)$/i.test(new URL(value).pathname); }
+  catch (_) { return false; }
+}
+
+function safeAudioFileName(value, contentType) {
+  let name = decodeURIComponent(value).replace(/[\\/:*?"<>|]/g, '_').trim();
+  if (!/\.(?:mp3|m4a|aac|ogg|oga|wav|flac|opus)$/i.test(name)) {
+    const extensions = {'audio/mpeg': '.mp3', 'audio/mp4': '.m4a', 'audio/aac': '.aac', 'audio/ogg': '.ogg', 'audio/wav': '.wav', 'audio/flac': '.flac'};
+    name += extensions[contentType] || '.mp3';
+  }
+  return name || 'authorized-audio.mp3';
+}
+
+function formatBytes(bytes) {
+  return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
 
 async function extract() {
@@ -178,4 +310,42 @@ async function extractFromLyricsify() {
     } catch (_) {}
   }
   return {error: 'No valid timestamped LRC was visible or downloadable on this page.'};
+}
+
+function extractAuthorizedAudioCandidates() {
+  const audioPattern = /\.(?:mp3|m4a|aac|ogg|oga|wav|flac|opus)(?:$|[?#])/i;
+  const candidates = new Map();
+  const add = (rawUrl, label, downloadName = '') => {
+    if (!rawUrl || /^(?:blob|data|javascript):/i.test(rawUrl)) return;
+    try {
+      const url = new URL(rawUrl, location.href);
+      if (!/^https?:$/.test(url.protocol)) return;
+      if (!audioPattern.test(url.pathname) && !downloadName) return;
+      const fileName = downloadName || decodeURIComponent(url.pathname.split('/').pop() || 'audio');
+      candidates.set(url.href, {
+        url: url.href,
+        fileName,
+        label: (label || fileName || url.href).trim().slice(0, 180)
+      });
+    } catch (_) {}
+  };
+  for (const node of document.querySelectorAll('audio[src], audio source[src]')) {
+    add(node.src, node.title || node.getAttribute('aria-label') || 'Audio player source');
+  }
+  for (const link of document.querySelectorAll('a[href]')) {
+    const downloadName = typeof link.download === 'string' ? link.download.trim() : '';
+    if (audioPattern.test(link.href) || downloadName) {
+      add(link.href, link.innerText || link.title || downloadName, downloadName);
+    }
+  }
+  const meta = name => document.querySelector(`meta[property="${name}"], meta[name="${name}"]`)?.content?.trim() || '';
+  return {
+    candidates: [...candidates.values()].slice(0, 50),
+    metadata: {
+      title: meta('og:title') || document.title.replace(/\s*[-|].*$/, '').trim(),
+      artist: meta('music:musician') || meta('author'),
+      album: meta('music:album'),
+      artwork: meta('og:image')
+    }
+  };
 }

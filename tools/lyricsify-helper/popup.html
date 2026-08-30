@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Telugu Tunes Lyrics Helper</title>
+  <title>Telugu Tunes Admin Helper</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <main>
     <h1>Telugu Tunes</h1>
-    <p class="hint">Open a Lyricsify song page, extract its LRC, select the exact Telugu Tunes song, then review and save.</p>
+    <p class="hint">Administrator tools for reviewed synced lyrics and audio you own or are licensed to import.</p>
 
     <section>
       <h2>1. Administrator account</h2>
@@ -25,7 +25,32 @@
     </section>
 
     <section>
-      <h2>2. Extract and select track</h2>
+      <h2>2. Authorized audio import</h2>
+      <p class="hint">Open an authorized source page. Only direct, unprotected audio links are detected.</p>
+      <button id="detectAudio">Detect audio links</button>
+      <label>Direct audio source
+        <select id="audioLinks"><option value="">Detect and choose an audio file</option></select>
+      </label>
+      <div class="grid">
+        <label>Title<input id="audioTitle" maxlength="160"></label>
+        <label>Artist<input id="audioArtist" maxlength="160"></label>
+      </div>
+      <div class="grid">
+        <label>Album / movie<input id="audioAlbum" maxlength="160"></label>
+        <label>Singer(s)<input id="audioSingers" maxlength="240"></label>
+      </div>
+      <div class="grid">
+        <label>Music director<input id="audioDirector" maxlength="160"></label>
+        <label>Genre<input id="audioGenre" maxlength="80"></label>
+      </div>
+      <label>Artwork URL<input id="audioArtwork" type="url"></label>
+      <label class="rights"><input id="rightsConfirmed" type="checkbox"> I confirm that I own this audio or have permission to copy it into Telugu Tunes.</label>
+      <button id="importAudio" disabled>Review and import audio</button>
+      <progress id="importProgress" max="100" value="0" hidden></progress>
+    </section>
+
+    <section>
+      <h2>3. Synced lyrics</h2>
       <button id="extract">Extract LRC from this page</button>
       <label>Search Telugu Tunes<input id="query" placeholder="Title, artist, singer, album, director or genre"></label>
       <button id="search" class="secondary">Search catalog</button>
@@ -35,7 +60,7 @@
     </section>
 
     <section>
-      <h2>3. Review</h2>
+      <h2>4. Review lyrics</h2>
       <label>Synced LRC<textarea id="lrc" rows="10" placeholder="[00:12.30]Line one"></textarea></label>
       <button id="save">Save to selected song</button>
     </section>
