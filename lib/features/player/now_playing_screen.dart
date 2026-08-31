@@ -29,6 +29,8 @@ class NowPlayingScreen extends StatelessWidget {
     return Scaffold(
       body: MusicalAurora(
         notes: true,
+        active: controller.playing && controller.playerError == null,
+        noteCount: 10,
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -93,7 +95,8 @@ class NowPlayingScreen extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 22),
-                          FloatingArtwork(
+                          PlaybackArtworkStage(
+                            size: artworkSize,
                             active: controller.playing &&
                                 controller.playerError == null,
                             child: Artwork(
@@ -223,6 +226,11 @@ class NowPlayingScreen extends StatelessWidget {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 10),
+                          PlaybackEqualizer(
+                            active: controller.playing &&
+                                controller.playerError == null,
+                          ),
                           const SizedBox(height: 22),
                           if (controller.sleepRemaining != null) ...[
                             Chip(
@@ -342,7 +350,7 @@ class _LyricsPanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Row(
             children: [
@@ -350,6 +358,7 @@ class _LyricsPanel extends StatelessWidget {
               const SizedBox(width: 8),
               const Expanded(
                 child: Text('Telugu lyrics',
+                    textAlign: TextAlign.center,
                     style: TextStyle(fontWeight: FontWeight.w900)),
               ),
               if (lyrics?.hasLyrics == true)
@@ -373,9 +382,11 @@ class _LyricsPanel extends StatelessWidget {
                   Text(currentLine.text,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontFamily: 'NotoSansTelugu',
                             color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.w900,
-                            height: 1.5,
+                            height: 1.6,
+                            letterSpacing: .15,
                           )),
                   if (currentEnglishLine != null &&
                       currentEnglishLine.text.isNotEmpty) ...[
@@ -393,12 +404,21 @@ class _LyricsPanel extends StatelessWidget {
           else if (lyrics?.plainLyrics.trim().isNotEmpty == true)
             Text(
               lyrics!.plainLyrics.split(RegExp(r'\r?\n')).first,
+              textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'NotoSansTelugu',
+                fontSize: 19,
+                height: 1.55,
+              ),
             )
           else
-            Text(controller.lyricsError ??
-                'No synced lyrics found. An admin can add an LRC file.'),
+            Text(
+              controller.lyricsError ??
+                  'No synced lyrics found. An admin can add an LRC file.',
+              textAlign: TextAlign.center,
+            ),
           if (controller.isAdmin) ...[
             const SizedBox(height: 10),
             Wrap(
@@ -647,8 +667,15 @@ class _SyncedLyricsSheet extends StatelessWidget {
               child: lines.isEmpty
                   ? SingleChildScrollView(
                       padding: const EdgeInsets.all(24),
-                      child: SelectableText(lyrics?.plainLyrics ??
-                          'No lyrics have been added for this song.'),
+                      child: SelectableText(
+                          lyrics?.plainLyrics ??
+                              'No lyrics have been added for this song.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontFamily: 'NotoSansTelugu',
+                            fontSize: 18,
+                            height: 1.65,
+                          )),
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
@@ -668,7 +695,9 @@ class _SyncedLyricsSheet extends StatelessWidget {
                           selected: active,
                           title: Text(
                             line.text,
+                            textAlign: TextAlign.center,
                             style: TextStyle(
+                              fontFamily: 'NotoSansTelugu',
                               fontSize: active ? 21 : 17,
                               fontWeight:
                                   active ? FontWeight.w900 : FontWeight.w500,
@@ -680,6 +709,7 @@ class _SyncedLyricsSheet extends StatelessWidget {
                               : Padding(
                                   padding: const EdgeInsets.only(top: 5),
                                   child: Text(englishLine.text,
+                                      textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: active ? 17 : 15,
                                         color: active
