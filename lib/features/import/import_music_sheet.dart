@@ -38,6 +38,8 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
   final _artworkUrl = TextEditingController();
   ImportSource? _selected;
   List<PlatformFile> _audioFiles = [];
+  List<_SongMetadataDraft> _songDrafts = [];
+  int _activeSongIndex = 0;
   String _color = '7C4DFF';
   String _metadataNotice = '';
   String _metadataSource = '';
@@ -65,12 +67,90 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
   }
 
   Future<void> _select(ImportSource source) async {
-    if (source == ImportSource.deviceFile ||
-        source == ImportSource.deviceFolder) {
-      await _pickAudio(allowMultiple: source == ImportSource.deviceFolder);
+    if (source == ImportSource.deviceFolder) {
+      await _requestAlbumAndPickFiles();
+      return;
+    }
+    if (source == ImportSource.deviceFile) {
+      _album.clear();
+      await _pickAudio(allowMultiple: false);
       return;
     }
     setState(() => _selected = source);
+  }
+
+  Future<void> _requestAlbumAndPickFiles() async {
+    final input = TextEditingController(text: _album.text);
+    final albumName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Name this album'),
+        content: TextField(
+          controller: input,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Album / movie name',
+            hintText: 'Enter once for all selected songs',
+          ),
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) {
+              Navigator.pop(dialogContext, value.trim());
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (input.text.trim().isNotEmpty) {
+                Navigator.pop(dialogContext, input.text.trim());
+              }
+            },
+            child: const Text('Choose songs'),
+          ),
+        ],
+      ),
+    );
+    input.dispose();
+    if (albumName == null || albumName.isEmpty || !mounted) return;
+    _album.text = albumName;
+    await _pickAudio(allowMultiple: true);
+  }
+
+  Future<void> _editAlbumName() async {
+    final input = TextEditingController(text: _album.text);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit album name'),
+        content: TextField(
+          controller: input,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(labelText: 'Album / movie name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (input.text.trim().isNotEmpty) {
+                Navigator.pop(dialogContext, input.text.trim());
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    input.dispose();
+    if (value != null && mounted) setState(() => _album.text = value);
   }
 
   Future<void> _pickAudio({required bool allowMultiple}) async {
@@ -117,25 +197,82 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         );
         if (approved != true) return;
       }
-      final firstName = _nameFromFile(files.first.name);
+      final drafts = files
+          .map((file) => _SongMetadataDraft(title: _nameFromFile(file.name)))
+          .toList();
       setState(() {
         _audioFiles = files;
-        _title.text = firstName;
-        _artist.clear();
-        _album.text = files.length > 1 ? 'Imported album' : '';
-        _singers.clear();
-        _musicDirector.clear();
-        _genre.clear();
-        _color = '7C4DFF';
-        _metadataSource = '';
-        _artworkUrl.clear();
-        _sourceUrl = '';
-        _metadataNotice =
-            'Review the details below. They will be saved with the uploaded audio.';
+        _songDrafts = drafts;
+        _activeSongIndex = 0;
       });
+      await _prefillFromCatalog(files);
+      _loadDraft(0);
     } catch (error) {
       _showError(error);
     }
+  }
+
+  Future<void> _prefillFromCatalog(List<PlatformFile> files) async {
+    if (!context.read<MusicController>().remoteMode) return;
+    var matched = 0;
+    var youtubeFallbacks = 0;
+    final drafts = List<_SongMetadataDraft>.from(_songDrafts);
+    for (var index = 0; index < files.length; index++) {
+      try {
+        final metadata = await context
+            .read<MusicController>()
+            .matchMetadataCatalog(files[index].name);
+        if (metadata != null) {
+          matched++;
+          drafts[index] = _SongMetadataDraft(
+            title: metadata.songName.isEmpty
+                ? drafts[index].title
+                : metadata.songName,
+            artist: metadata.primaryArtist,
+            singers: metadata.singers,
+            musicDirector: metadata.musicDirector,
+            genre: metadata.genre,
+            metadataSource: 'Excel metadata catalog',
+            metadataNotice: 'Matched ${files[index].name}',
+          );
+          continue;
+        }
+
+        final fallback = await context
+            .read<MusicController>()
+            .suggestYouTubeMetadata(_nameFromFile(files[index].name));
+        final hasFallback = fallback.artist.isNotEmpty ||
+            fallback.album.isNotEmpty ||
+            fallback.singers.isNotEmpty;
+        if (!hasFallback) continue;
+        youtubeFallbacks++;
+        drafts[index] = _SongMetadataDraft(
+          title: fallback.title.isEmpty ? drafts[index].title : fallback.title,
+          artist: fallback.artist,
+          singers: fallback.singers,
+          musicDirector: fallback.musicDirector,
+          genre: fallback.genre,
+          artworkUrl: fallback.artworkCandidates.isEmpty
+              ? fallback.thumbnailUrl
+              : fallback.artworkCandidates.first.imageUrl,
+          color: fallback.color,
+          sourceUrl: fallback.sourceUrl,
+          metadataSource: 'YouTube fallback',
+          metadataNotice: 'No Excel match; review the fetched details.',
+        );
+      } catch (_) {
+        // An unmatched or temporarily unavailable catalog must never block upload.
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _songDrafts = drafts;
+      if (matched > 0 || youtubeFallbacks > 0) {
+        _metadataSource = 'Excel first';
+        _metadataNotice = '$matched Excel matches, '
+            '$youtubeFallbacks YouTube fallbacks for ${files.length} songs.';
+      }
+    });
   }
 
   Future<void> _askAi() async {
@@ -149,6 +286,32 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
     if (query.isEmpty) return;
     setState(() => _askingAi = true);
     try {
+      final catalogQuery = _audioFiles.isNotEmpty &&
+              _activeSongIndex >= 0 &&
+              _activeSongIndex < _audioFiles.length
+          ? _audioFiles[_activeSongIndex].name
+          : query;
+      final catalog = await context
+          .read<MusicController>()
+          .matchMetadataCatalog(catalogQuery);
+      if (catalog != null) {
+        if (!mounted) return;
+        setState(() {
+          _title.text =
+              catalog.songName.isEmpty ? _title.text : catalog.songName;
+          _artist.text = catalog.primaryArtist;
+          _album.text = catalog.album;
+          _singers.text = catalog.singers;
+          _musicDirector.text = catalog.musicDirector;
+          _genre.text = catalog.genre;
+          _metadataSource = 'Excel metadata catalog';
+          _metadataNotice =
+              'Matched the uploaded catalog. YouTube was not used.';
+        });
+        _saveActiveDraft();
+        return;
+      }
+
       final result =
           await context.read<MusicController>().suggestMetadata(query);
       if (!mounted) return;
@@ -167,9 +330,10 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         _color = result.color;
         _artworkUrl.text = selectedCover?.imageUrl ?? currentArtwork;
         _sourceUrl = result.sourceUrl;
-        _metadataSource = result.source;
-        _metadataNotice = result.notice;
+        _metadataSource = '${result.source} fallback';
+        _metadataNotice = 'No Excel catalog match. ${result.notice}';
       });
+      _saveActiveDraft();
     } catch (error) {
       _showError(error);
     } finally {
@@ -179,8 +343,11 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
 
   Future<void> _upload() async {
     if (_audioFiles.isEmpty) return;
-    if (_title.text.trim().isEmpty) {
-      _showMessage('Enter a title before uploading.');
+    _saveActiveDraft();
+    final incomplete = _songDrafts.indexWhere((draft) => draft.title.isEmpty);
+    if (incomplete >= 0) {
+      _goToSong(incomplete);
+      _showMessage('Enter a title for song ${incomplete + 1}.');
       return;
     }
     _startUploadStatus();
@@ -190,6 +357,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
       final receipts = <ImportReceipt>[];
       for (var index = 0; index < _audioFiles.length; index++) {
         final file = _audioFiles[index];
+        final draft = _songDrafts[index];
         if (mounted) {
           setState(() {
             _uploadFileIndex = index;
@@ -200,15 +368,15 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         receipt = await controller.uploadAudio(
           file.name,
           file.bytes!,
-          title: index == 0 ? _title.text.trim() : _nameFromFile(file.name),
-          artist: _artist.text.trim(),
+          title: draft.title,
+          artist: draft.artist,
           album: _album.text.trim(),
-          color: _color,
-          singers: _singers.text.trim(),
-          musicDirector: _musicDirector.text.trim(),
-          genre: _genre.text.trim(),
-          artworkUrl: _artworkUrl.text.trim(),
-          sourceUrl: _sourceUrl,
+          color: draft.color,
+          singers: draft.singers,
+          musicDirector: draft.musicDirector,
+          genre: draft.genre,
+          artworkUrl: draft.artworkUrl,
+          sourceUrl: draft.sourceUrl,
         );
         receipts.add(receipt);
       }
@@ -225,6 +393,58 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
       _showError(error);
     } finally {
       _stopUploadStatus();
+    }
+  }
+
+  void _saveActiveDraft() {
+    if (_songDrafts.isEmpty || _activeSongIndex >= _songDrafts.length) return;
+    _songDrafts[_activeSongIndex] = _SongMetadataDraft(
+      title: _title.text.trim(),
+      artist: _artist.text.trim(),
+      singers: _singers.text.trim(),
+      musicDirector: _musicDirector.text.trim(),
+      genre: _genre.text.trim(),
+      youtubeUrl: _youtubeUrl.text.trim(),
+      artworkUrl: _artworkUrl.text.trim(),
+      color: _color,
+      metadataNotice: _metadataNotice,
+      metadataSource: _metadataSource,
+      sourceUrl: _sourceUrl,
+    );
+  }
+
+  void _loadDraft(int index) {
+    final draft = _songDrafts[index];
+    _title.text = draft.title;
+    _artist.text = draft.artist;
+    _singers.text = draft.singers;
+    _musicDirector.text = draft.musicDirector;
+    _genre.text = draft.genre;
+    _youtubeUrl.text = draft.youtubeUrl;
+    _artworkUrl.text = draft.artworkUrl;
+    _color = draft.color;
+    _metadataNotice = draft.metadataNotice.isEmpty
+        ? 'Review this song’s details. Each file keeps its own metadata.'
+        : draft.metadataNotice;
+    _metadataSource = draft.metadataSource;
+    _sourceUrl = draft.sourceUrl;
+  }
+
+  void _goToSong(int index) {
+    if (index < 0 || index >= _songDrafts.length || _submitting) return;
+    _saveActiveDraft();
+    setState(() {
+      _activeSongIndex = index;
+      _loadDraft(index);
+    });
+  }
+
+  void _handleSongSwipe(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity < -180 && _activeSongIndex < _songDrafts.length - 1) {
+      _goToSong(_activeSongIndex + 1);
+    } else if (velocity > 180 && _activeSongIndex > 0) {
+      _goToSong(_activeSongIndex - 1);
     }
   }
 
@@ -407,115 +627,212 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         ],
       );
 
-  Widget _metadataForm(BuildContext context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Review song details',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          Text(
-            _audioFiles.length == 1
-                ? _audioFiles.first.name
-                : '${_audioFiles.length} files selected — album and artist apply to all.',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-              controller: _title,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Song title')),
-          const SizedBox(height: 10),
-          _metadataFields(context),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _youtubeUrl,
-            keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              labelText: 'YouTube song URL (optional, best match)',
-              hintText: 'https://www.youtube.com/watch?v=...',
-              prefixIcon: Icon(Icons.smart_display_rounded),
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _artworkUrl,
-            keyboardType: TextInputType.url,
-            onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(
-              labelText: 'Artwork URL (optional)',
-              helperText: 'You can replace the suggested cover before upload.',
-              prefixIcon: Icon(Icons.image_outlined),
-            ),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _askingAi ? null : _askAi,
-            icon: _askingAi
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.auto_awesome_rounded),
-            label: Text(_askingAi
-                ? 'Finding details…'
-                : 'Find details and choose cover'),
-          ),
-          if (_artworkUrl.text.trim().isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _metadataPreview(context),
-          ],
-          if (_metadataNotice.isNotEmpty) ...[
-            const SizedBox(height: 8),
+  Widget _metadataForm(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragEnd: _audioFiles.length > 1 ? _handleSongSwipe : null,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_audioFiles.length > 1 ? 'Build album' : 'Review song details',
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 6),
             Text(
-              _metadataSource.isEmpty
-                  ? _metadataNotice
-                  : 'Source: $_metadataSource — $_metadataNotice',
+              _audioFiles.length == 1
+                  ? _audioFiles.first.name
+                  : 'Song ${_activeSongIndex + 1} of ${_audioFiles.length} • ${_audioFiles[_activeSongIndex].name}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall,
             ),
-          ],
-          const SizedBox(height: 6),
-          Text(
-            'Song details only label the upload. They do not replace the selected MP3, so choose audio that matches the song.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _submitting ? null : _upload,
-              icon: _submitting
+            if (_audioFiles.length > 1) ...[
+              const SizedBox(height: 12),
+              LinearProgressIndicator(
+                value: (_activeSongIndex + 1) / _audioFiles.length,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primaryContainer
+                      .withValues(alpha: .45),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.album_rounded),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Album',
+                              style: Theme.of(context).textTheme.labelMedium),
+                          Text(_album.text,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w900, fontSize: 16)),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _submitting ? null : _editAlbumName,
+                      tooltip: 'Edit album name',
+                      icon: const Icon(Icons.edit_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: Text(
+                  'Swipe left for next song • swipe right to go back',
+                  style: Theme.of(context).textTheme.labelMedium,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextField(
+                controller: _title,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'Song title')),
+            const SizedBox(height: 10),
+            _metadataFields(context),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _youtubeUrl,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'YouTube song URL (optional, best match)',
+                hintText: 'https://www.youtube.com/watch?v=...',
+                prefixIcon: Icon(Icons.smart_display_rounded),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _artworkUrl,
+              keyboardType: TextInputType.url,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: 'Artwork URL (optional)',
+                helperText:
+                    'You can replace the suggested cover before upload.',
+                prefixIcon: Icon(Icons.image_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _askingAi ? null : _askAi,
+              icon: _askingAi
                   ? const SizedBox.square(
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.cloud_upload_rounded),
-              label: Text(
-                  _submitting ? _uploadStage : 'Upload to private library'),
+                  : const Icon(Icons.auto_awesome_rounded),
+              label: Text(_askingAi
+                  ? 'Finding details…'
+                  : 'Find details and choose cover'),
             ),
-          ),
-          if (_submitting) ...[
-            const SizedBox(height: 8),
-            LinearProgressIndicator(
-              semanticsLabel: _uploadStage,
-            ),
+            if (_artworkUrl.text.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _metadataPreview(context),
+            ],
+            if (_metadataNotice.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                _metadataSource.isEmpty
+                    ? _metadataNotice
+                    : 'Source: $_metadataSource — $_metadataNotice',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 6),
             Text(
-              '${_audioFiles.length > 1 ? 'File ${_uploadFileIndex + 1} of ${_audioFiles.length} • ' : ''}${_uploadElapsedSeconds}s elapsed. Keep this window open.',
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center,
+              'Song details only label the upload. They do not replace the selected MP3, so choose audio that matches the song.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 18),
+            if (_audioFiles.length > 1)
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _activeSongIndex == 0 || _submitting
+                          ? null
+                          : () => _goToSong(_activeSongIndex - 1),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      label: const Text('Previous'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _activeSongIndex < _audioFiles.length - 1
+                        ? FilledButton.icon(
+                            onPressed: _submitting
+                                ? null
+                                : () => _goToSong(_activeSongIndex + 1),
+                            icon: const Icon(Icons.arrow_forward_rounded),
+                            label: const Text('Save & next'),
+                          )
+                        : FilledButton.icon(
+                            onPressed: _submitting ? null : _upload,
+                            icon: _submitting
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2))
+                                : const Icon(Icons.cloud_upload_rounded),
+                            label:
+                                Text(_submitting ? _uploadStage : 'Save album'),
+                          ),
+                  ),
+                ],
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _submitting ? null : _upload,
+                  icon: _submitting
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.cloud_upload_rounded),
+                  label: Text(
+                      _submitting ? _uploadStage : 'Upload to private library'),
+                ),
+              ),
+            if (_submitting) ...[
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                semanticsLabel: _uploadStage,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${_audioFiles.length > 1 ? 'File ${_uploadFileIndex + 1} of ${_audioFiles.length} • ' : ''}${_uploadElapsedSeconds}s elapsed. Keep this window open.',
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+            ],
+            TextButton(
+              onPressed: _submitting
+                  ? null
+                  : () => setState(() {
+                        _audioFiles = [];
+                        _songDrafts = [];
+                        _activeSongIndex = 0;
+                      }),
+              child: const Text('Choose different files'),
             ),
           ],
-          TextButton(
-            onPressed:
-                _submitting ? null : () => setState(() => _audioFiles = []),
-            child: const Text('Choose different files'),
-          ),
-        ],
+        ),
       );
 
   Widget _metadataFields(BuildContext context) => LayoutBuilder(
@@ -527,15 +844,16 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(labelText: 'Primary artist'),
             ),
-            TextField(
-              controller: _album,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Album / movie',
-                helperText:
-                    'If it is not found automatically, enter the movie name.',
+            if (_audioFiles.length == 1)
+              TextField(
+                controller: _album,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Album / movie',
+                  helperText:
+                      'If it is not found automatically, enter the movie name.',
+                ),
               ),
-            ),
             TextField(
               controller: _singers,
               textCapitalization: TextCapitalization.words,
@@ -602,6 +920,34 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
 }
 
 String _megabytes(int bytes) => '${(bytes / 1000000).toStringAsFixed(2)} MB';
+
+class _SongMetadataDraft {
+  const _SongMetadataDraft({
+    required this.title,
+    this.artist = '',
+    this.singers = '',
+    this.musicDirector = '',
+    this.genre = '',
+    this.youtubeUrl = '',
+    this.artworkUrl = '',
+    this.color = '7C4DFF',
+    this.metadataNotice = '',
+    this.metadataSource = '',
+    this.sourceUrl = '',
+  });
+
+  final String title;
+  final String artist;
+  final String singers;
+  final String musicDirector;
+  final String genre;
+  final String youtubeUrl;
+  final String artworkUrl;
+  final String color;
+  final String metadataNotice;
+  final String metadataSource;
+  final String sourceUrl;
+}
 
 class _ImportOption extends StatelessWidget {
   const _ImportOption({
