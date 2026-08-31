@@ -7,6 +7,12 @@ import 'package:telugu_tunes/main.dart';
 import 'package:telugu_tunes/state/music_controller.dart';
 
 void main() {
+  Future<void> pumpUi(WidgetTester tester) async {
+    for (var index = 0; index < 6; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+
   testWidgets('home loads the mock Telugu music client', (tester) async {
     await tester.pumpWidget(
       const TeluguTunesApp(useMockData: true),
@@ -41,7 +47,7 @@ void main() {
     }
 
     tester.element(find.byType(AppShell)).read<MusicController>().setTab(3);
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
     await tester.scrollUntilVisible(
       find.text('Close room for everyone'),
       300,
@@ -50,9 +56,9 @@ void main() {
     expect(find.text('Close room for everyone'), findsOneWidget);
 
     await tester.tap(find.text('Close room for everyone'));
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Close room'));
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
 
     expect(find.text('Start your own room'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -72,7 +78,7 @@ void main() {
 
     expect(find.text('Recently played'), findsOneWidget);
     tester.element(find.byType(AppShell)).read<MusicController>().setTab(3);
-    await tester.pumpAndSettle();
+    await pumpUi(tester);
 
     expect(find.text('Sign in for listening rooms'), findsOneWidget);
   });

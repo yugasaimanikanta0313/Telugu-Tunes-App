@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/music_controller.dart';
 import '../../data/services/api_music_service.dart';
+import '../../design/telugu_tunes_design.dart';
 import '../auth/sign_in_screen.dart';
 import '../home/home_screen.dart';
 import '../import/import_music_sheet.dart';
@@ -72,56 +73,69 @@ class AppShell extends StatelessWidget {
           ]),
           if (controller.votePromptTrack case final track?)
             Positioned(
-              left: 16, right: 16, bottom: controller.current == null ? 16 : 82,
-              child: Center(child: ConstrainedBox(
+              left: 16,
+              right: 16,
+              bottom: controller.current == null ? 16 : 82,
+              child: Center(
+                  child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 620),
-                child: Card(elevation: 12, child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-                  child: Row(children: [
-                    const Icon(Icons.how_to_vote_outlined),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text('Should “${track.title}” be added to a recommended playlist?')),
-                    TextButton(onPressed: () {
-                      controller.dismissVotePrompt();
-                      showRecommendationVoteSheet(context, track);
-                    }, child: const Text('Go to voting')),
-                    IconButton(onPressed: controller.dismissVotePrompt,
-                        tooltip: 'Not now', icon: const Icon(Icons.close_rounded)),
-                  ]),
-                )),
+                child: Card(
+                    elevation: 12,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+                      child: Row(children: [
+                        const Icon(Icons.how_to_vote_outlined),
+                        const SizedBox(width: 12),
+                        Expanded(
+                            child: Text(
+                                'Should “${track.title}” be added to a recommended playlist?')),
+                        TextButton(
+                            onPressed: () {
+                              controller.dismissVotePrompt();
+                              showRecommendationVoteSheet(context, track);
+                            },
+                            child: const Text('Go to voting')),
+                        IconButton(
+                            onPressed: controller.dismissVotePrompt,
+                            tooltip: 'Not now',
+                            icon: const Icon(Icons.close_rounded)),
+                      ]),
+                    )),
               )),
             ),
         ]);
         return Scaffold(
-          body: wide
-              ? Row(
-                  children: [
-                    NavigationRail(
-                      selectedIndex: controller.activeTab,
-                      onDestinationSelected: controller.setTab,
-                      labelType: NavigationRailLabelType.all,
-                      leading: Padding(
-                        padding: const EdgeInsets.only(top: 16, bottom: 16),
-                        child: IconButton.filled(
-                            onPressed:
-                                controller.isAuthenticated && controller.isAdmin
-                                    ? () => showImportMusicSheet(context)
-                                    : null,
-                            tooltip: 'Add music',
-                            icon: const Icon(Icons.add_rounded)),
+          body: MusicalAurora(
+            child: wide
+                ? Row(
+                    children: [
+                      NavigationRail(
+                        selectedIndex: controller.activeTab,
+                        onDestinationSelected: controller.setTab,
+                        labelType: NavigationRailLabelType.all,
+                        leading: Padding(
+                          padding: const EdgeInsets.only(top: 16, bottom: 16),
+                          child: IconButton.filled(
+                              onPressed: controller.isAuthenticated &&
+                                      controller.isAdmin
+                                  ? () => showImportMusicSheet(context)
+                                  : null,
+                              tooltip: 'Add music',
+                              icon: const Icon(Icons.add_rounded)),
+                        ),
+                        destinations: List.generate(
+                            _labels.length,
+                            (index) => NavigationRailDestination(
+                                icon: Icon(_icons[index]),
+                                selectedIcon: Icon(_icons[index]),
+                                label: Text(_labels[index]))),
                       ),
-                      destinations: List.generate(
-                          _labels.length,
-                          (index) => NavigationRailDestination(
-                              icon: Icon(_icons[index]),
-                              selectedIcon: Icon(_icons[index]),
-                              label: Text(_labels[index]))),
-                    ),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: content),
-                  ],
-                )
-              : content,
+                      const VerticalDivider(width: 1),
+                      Expanded(child: content),
+                    ],
+                  )
+                : content,
+          ),
           bottomNavigationBar: wide
               ? null
               : NavigationBar(
@@ -204,7 +218,7 @@ class _MiniPlayer extends StatelessWidget {
     final controller = context.watch<MusicController>();
     final track = controller.current!;
     return Material(
-      color: const Color(0xff22222a),
+      color: TeluguTunesColors.surfaceHigh.withValues(alpha: .97),
       child: InkWell(
         onTap: onOpen,
         child: Column(

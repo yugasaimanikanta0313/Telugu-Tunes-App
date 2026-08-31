@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'data/repositories/music_repository.dart';
 import 'data/services/api_music_service.dart';
 import 'data/services/auth_session_service.dart';
+import 'design/telugu_tunes_design.dart';
 import 'features/shared/server_wake_gate.dart';
 import 'features/shell/app_shell.dart';
 import 'state/music_controller.dart';
@@ -111,26 +112,6 @@ Widget _buildMaterialApp(Widget home,
     MaterialApp(
       title: 'Telugu Tunes',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-            seedColor: seedColor, brightness: Brightness.dark),
-        scaffoldBackgroundColor: const Color(0xff101014),
-        cardTheme: const CardThemeData(color: Color(0xff1d1d24)),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xff1d1d24),
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xffe15184)),
-          ),
-        ),
-      ),
+      theme: teluguTunesTheme(),
       home: home,
     );
