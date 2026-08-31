@@ -9,4 +9,5 @@ public interface PlaylistInvitationRepository extends MongoRepository<PlaylistIn
   List<PlaylistInvitationDocument> findByInviteeMemberIdAndStatusOrderByCreatedAtDesc(String memberId, String status);
   Optional<PlaylistInvitationDocument> findByPlaylistIdAndInviteeMemberIdAndStatus(
       String playlistId, String inviteeMemberId, String status);
+  void deleteByPlaylistId(String playlistId);
 }

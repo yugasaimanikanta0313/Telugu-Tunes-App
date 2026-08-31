@@ -48,6 +48,7 @@ abstract class MusicApiService {
   Future<MemberProfile> getProfile();
   Future<Playlist> createPlaylist(String name);
   Future<Playlist> updatePlaylist(Playlist playlist);
+  Future<void> deletePlaylist(String playlistId);
   Future<Playlist> addTrackToPlaylist(String playlistId, String trackId);
   Future<List<PlaylistInvitation>> getPlaylistInvitations();
   Future<PlaylistInvitation> invitePlaylistCollaborator(
@@ -419,6 +420,17 @@ class SpringBootMusicApiService implements MusicApiService {
           'artworkUrl': playlist.artworkUrl,
         }),
       );
+
+  @override
+  Future<void> deletePlaylist(String playlistId) async {
+    final response = await _client.delete(
+      Uri.parse('${config.baseUrl}/playlists/$playlistId'),
+      headers: _headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(_errorMessage(response));
+    }
+  }
 
   @override
   Future<Playlist> addTrackToPlaylist(

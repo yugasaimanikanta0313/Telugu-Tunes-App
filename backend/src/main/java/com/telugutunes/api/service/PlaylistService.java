@@ -16,6 +16,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PlaylistService {
@@ -117,6 +118,18 @@ public class PlaylistService {
         playlist.sharedWithMemberIds(),
         playlist.createdAt(),
         Instant.now())), memberId);
+  }
+
+  @Transactional
+  public void delete(String memberId, String playlistId) {
+    var playlist = playlists.findById(playlistId)
+        .orElseThrow(() -> new NotFoundException("Playlist not found."));
+    if (!playlist.ownerMemberId().equals(memberId)) {
+      throw new IllegalArgumentException("Only the playlist owner can delete it.");
+    }
+    contributions.deleteByPlaylistId(playlistId);
+    invitations.deleteByPlaylistId(playlistId);
+    playlists.delete(playlist);
   }
 
   private PlaylistResponse response(PlaylistDocument playlist, String memberId) {

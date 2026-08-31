@@ -34,6 +34,7 @@ abstract class MusicRepository {
   Future<List<ListeningRoom>> getPublicRooms();
   Future<Playlist> createPlaylist(String name);
   Future<Playlist> updatePlaylist(Playlist playlist);
+  Future<void> deletePlaylist(String playlistId);
   Future<Playlist> addTrackToPlaylist(String playlistId, Track track);
   Future<List<PlaylistInvitation>> getPlaylistInvitations();
   Future<PlaylistInvitation> invitePlaylistCollaborator(
@@ -164,6 +165,9 @@ class SpringBootMusicRepository implements MusicRepository {
   @override
   Future<Playlist> updatePlaylist(Playlist playlist) =>
       _api.updatePlaylist(playlist);
+  @override
+  Future<void> deletePlaylist(String playlistId) =>
+      _api.deletePlaylist(playlistId);
   @override
   Future<Playlist> addTrackToPlaylist(String playlistId, Track track) =>
       _api.addTrackToPlaylist(playlistId, track.id);
@@ -535,6 +539,8 @@ class MockMusicRepository implements MusicRepository {
 
   @override
   Future<Playlist> updatePlaylist(Playlist playlist) async => playlist;
+  @override
+  Future<void> deletePlaylist(String playlistId) async {}
 
   @override
   Future<Playlist> addTrackToPlaylist(String playlistId, Track track) async {

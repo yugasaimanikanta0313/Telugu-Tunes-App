@@ -11,4 +11,6 @@ public interface PlaylistTrackContributionRepository
 
   Optional<PlaylistTrackContributionDocument> findByPlaylistIdAndTrackId(
       String playlistId, String trackId);
+
+  void deleteByPlaylistId(String playlistId);
 }

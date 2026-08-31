@@ -1042,6 +1042,13 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> deletePlaylist(String playlistId) async {
+    await _repository.deletePlaylist(playlistId);
+    _playlists =
+        _playlists.where((playlist) => playlist.id != playlistId).toList();
+    notifyListeners();
+  }
+
   Future<void> addToPlaylist(String playlistId, Track track) async {
     final updated = await _repository.addTrackToPlaylist(playlistId, track);
     _playlists = _playlists

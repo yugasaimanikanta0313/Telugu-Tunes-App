@@ -18,8 +18,9 @@ class PlaylistDetailScreen extends StatelessWidget {
       return const Scaffold(
           body: Center(child: Text('Playlist is no longer available.')));
     }
-    final isOwner = playlist.ownerMemberId.isEmpty ||
-        playlist.ownerMemberId == music.memberId;
+    final isOwner = playlist.ownedByCurrentMember ??
+        (playlist.ownerMemberId.isEmpty ||
+            playlist.ownerMemberId == music.memberId);
     return Scaffold(
       appBar: AppBar(
         title: Text(playlist.name),
@@ -34,6 +35,11 @@ class PlaylistDetailScreen extends StatelessWidget {
                 onPressed: () => _edit(context, playlist),
                 tooltip: 'Edit playlist',
                 icon: const Icon(Icons.edit_outlined)),
+          if (isOwner)
+            IconButton(
+                onPressed: () => _delete(context, playlist),
+                tooltip: 'Delete playlist',
+                icon: const Icon(Icons.delete_outline_rounded)),
         ],
       ),
       body: CustomScrollView(slivers: [
@@ -204,5 +210,37 @@ class PlaylistDetailScreen extends StatelessWidget {
     name.dispose();
     description.dispose();
     artwork.dispose();
+  }
+
+  Future<void> _delete(BuildContext context, Playlist playlist) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Delete playlist?'),
+            content: Text(
+                'Delete “${playlist.name}”? Songs will remain in the catalog, but this playlist and its collaboration access will be removed.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.error),
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Delete')),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !context.mounted) return;
+    try {
+      await context.read<MusicController>().deletePlaylist(playlist.id);
+      if (context.mounted) Navigator.pop(context);
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(error.toString().replaceFirst('Bad state: ', ''))));
+      }
+    }
   }
 }
