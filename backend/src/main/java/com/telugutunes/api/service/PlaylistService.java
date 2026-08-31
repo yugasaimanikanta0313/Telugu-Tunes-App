@@ -45,7 +45,7 @@ public class PlaylistService {
     invitations.findByInviteeMemberIdAndStatusOrderByCreatedAtDesc(memberId, "ACCEPTED")
         .forEach(invitation -> playlists.findById(invitation.playlistId())
             .ifPresent(value -> accessible.put(value.id(), value)));
-    return accessible.values().stream().map(this::response).toList();
+    return accessible.values().stream().map(value -> response(value, memberId)).toList();
   }
 
   public PlaylistResponse create(String memberId, CreatePlaylistRequest request) {
@@ -63,7 +63,7 @@ public class PlaylistService {
                 List.of(),
                 now,
                 now));
-    return response(playlist);
+    return response(playlist, memberId);
   }
 
   public PlaylistResponse addTrack(String memberId, String playlistId, String trackId) {
@@ -94,7 +94,7 @@ public class PlaylistService {
       contributions.save(new PlaylistTrackContributionDocument(
           null, playlistId, trackId, memberId, Instant.now()));
     }
-    return response(saved);
+    return response(saved, memberId);
   }
 
   public PlaylistResponse update(
@@ -116,10 +116,10 @@ public class PlaylistService {
         playlist.trackIds(),
         playlist.sharedWithMemberIds(),
         playlist.createdAt(),
-        Instant.now())));
+        Instant.now())), memberId);
   }
 
-  private PlaylistResponse response(PlaylistDocument playlist) {
+  private PlaylistResponse response(PlaylistDocument playlist, String memberId) {
     var tracks = catalog.tracksByIds(playlist.trackIds());
     var artworkUrl = playlist.artworkUrl() == null ? "" : playlist.artworkUrl().trim();
     if (artworkUrl.isBlank()) {
@@ -138,6 +138,7 @@ public class PlaylistService {
         tracks,
         playlist.sharedWithMemberIds(),
         playlist.ownerMemberId(),
+        playlist.ownerMemberId().equals(memberId),
         contributionNames(playlist));
   }
 

@@ -146,6 +146,7 @@ class Playlist {
     this.artworkUrl = '',
     this.isPinned = false,
     this.ownerMemberId = '',
+    this.ownedByCurrentMember,
     this.sharedWithMemberIds = const [],
     this.trackAddedByNames = const {},
   });
@@ -158,6 +159,7 @@ class Playlist {
   final List<Track> tracks;
   final bool isPinned;
   final String ownerMemberId;
+  final bool? ownedByCurrentMember;
   final List<String> sharedWithMemberIds;
   final Map<String, String> trackAddedByNames;
 
@@ -170,6 +172,7 @@ class Playlist {
         tracks: tracks ?? this.tracks,
         isPinned: isPinned,
         ownerMemberId: ownerMemberId,
+        ownedByCurrentMember: ownedByCurrentMember,
         sharedWithMemberIds: sharedWithMemberIds,
         trackAddedByNames: trackAddedByNames,
       );

@@ -127,12 +127,14 @@ class MusicController extends ChangeNotifier {
   List<Playlist> get playlists => _playlists;
   List<Playlist> get ownedPlaylists => _playlists
       .where((playlist) =>
-          playlist.ownerMemberId.isEmpty || playlist.ownerMemberId == memberId)
+          playlist.ownedByCurrentMember ??
+          (playlist.ownerMemberId.isEmpty ||
+              playlist.ownerMemberId == memberId))
       .toList();
   List<Playlist> get collaborativePlaylists => _playlists
-      .where((playlist) =>
-          playlist.ownerMemberId.isNotEmpty &&
-          playlist.ownerMemberId != memberId)
+      .where((playlist) => !(playlist.ownedByCurrentMember ??
+          (playlist.ownerMemberId.isEmpty ||
+              playlist.ownerMemberId == memberId)))
       .toList();
   List<RecommendedPlaylist> get recommendedPlaylists => _recommendedPlaylists;
   Map<String, RecommendedPlaylistPreference> get recommendationPreferences =>

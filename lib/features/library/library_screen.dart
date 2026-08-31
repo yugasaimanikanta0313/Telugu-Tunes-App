@@ -6,6 +6,7 @@ import '../../state/music_controller.dart';
 import '../import/import_music_sheet.dart';
 import '../shared/widgets.dart';
 import 'playlist_detail_screen.dart';
+import 'collaborative_playlists_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -111,6 +112,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           ]),
                     ),
                   ),
+                  if (controller.isAuthenticated)
+                    CollectionCard(
+                      title: 'Collaborated playlists',
+                      subtitle:
+                          '${controller.collaborativePlaylists.length} shared',
+                      color: '6D5D8C',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CollaborativePlaylistsScreen(),
+                        ),
+                      ),
+                    ),
                   ...controller.ownedPlaylists.map((playlist) => CollectionCard(
                         title: playlist.name,
                         subtitle: playlist.tracks.length.toString() + ' songs',

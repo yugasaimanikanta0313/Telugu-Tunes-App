@@ -12,4 +12,5 @@ public record PlaylistResponse(
     List<TrackResponse> tracks,
     List<String> sharedWithMemberIds,
     String ownerMemberId,
+    boolean ownedByCurrentMember,
     Map<String, String> trackAddedByNames) {}

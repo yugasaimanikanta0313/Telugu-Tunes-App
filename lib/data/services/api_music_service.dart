@@ -901,6 +901,7 @@ class SpringBootMusicApiService implements MusicApiService {
         artworkUrl: json['artworkUrl'] as String? ?? '',
         tracks: _list(json['tracks']).map(_track).toList(),
         ownerMemberId: json['ownerMemberId'] as String? ?? '',
+        ownedByCurrentMember: json['ownedByCurrentMember'] as bool?,
         sharedWithMemberIds: _list(json['sharedWithMemberIds'])
             .map((v) => v.toString())
             .toList(),
