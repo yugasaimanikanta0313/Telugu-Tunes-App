@@ -91,10 +91,39 @@ public class MetadataCatalogService {
     String query = normalizeSong(fileName);
     Optional<MetadataCatalogEntry> exact = repository.findFirstByNormalizedSongName(query);
     if (exact.isPresent()) return exact;
-    return repository.findAll().stream()
+    List<MetadataCatalogEntry> entries = repository.findAll();
+    Optional<MetadataCatalogEntry> contained = entries.stream()
         .filter(entry -> !query.isBlank() && (query.contains(entry.normalizedSongName())
             || entry.normalizedSongName().contains(query)))
         .max(java.util.Comparator.comparingInt(entry -> entry.normalizedSongName().length()));
+    if (contained.isPresent()) return contained;
+    if (query.length() < 4) return Optional.empty();
+    return entries.stream()
+        .map(entry -> Map.entry(entry, similarity(query, entry.normalizedSongName())))
+        .filter(candidate -> candidate.getValue() >= 0.72)
+        .max(Map.Entry.comparingByValue())
+        .map(Map.Entry::getKey);
+  }
+
+  static double similarity(String left, String right) {
+    if (left.equals(right)) return 1.0;
+    int longest = Math.max(left.length(), right.length());
+    if (longest == 0) return 1.0;
+    int[] previous = new int[right.length() + 1];
+    int[] current = new int[right.length() + 1];
+    for (int column = 0; column <= right.length(); column++) previous[column] = column;
+    for (int row = 1; row <= left.length(); row++) {
+      current[0] = row;
+      for (int column = 1; column <= right.length(); column++) {
+        int cost = left.charAt(row - 1) == right.charAt(column - 1) ? 0 : 1;
+        current[column] = Math.min(Math.min(current[column - 1] + 1,
+            previous[column] + 1), previous[column - 1] + cost);
+      }
+      int[] swap = previous;
+      previous = current;
+      current = swap;
+    }
+    return 1.0 - ((double) previous[right.length()] / longest);
   }
 
   static String normalizeSong(String input) {
