@@ -35,8 +35,17 @@ class AudioPlaybackService {
       _player.playerStateStream
           .where((value) => value.processingState == ProcessingState.completed)
           .listen((_) => _completed.add(null)),
-      _player.errorStream
-          .listen((error) => _errors.add('Playback failed: $error')),
+      _player.errorStream.listen((error) {
+        final message = error.toString();
+        if (message.contains('MEDIA_ELEMENT_ERROR') ||
+            message.contains('Format error')) {
+          _errors.add(
+              'This audio file is not browser-compatible. Ask an administrator to replace its audio.');
+        } else if (!message.contains('AbortError') &&
+            !message.contains('interrupted by a new load')) {
+          _errors.add('Playback failed: $error');
+        }
+      }),
     ];
   }
 
@@ -57,6 +66,7 @@ class AudioPlaybackService {
   Timer? _speedResetTimer;
   DateTime? _lastHardSeekAt;
   double _speed = 1;
+  Future<void> _operation = Future.value();
 
   bool get isAvailable => _apiBaseUrl.isNotEmpty;
   Stream<Duration> get positionStream => _position.stream;
@@ -73,16 +83,32 @@ class AudioPlaybackService {
       throw StateError(
           'Connect the private API before playing uploaded audio.');
     }
-    final requestedQueue = _normalizedQueue(track, queue);
-    final requestedIds = requestedQueue.map((item) => item.id).toList();
-    final index = requestedIds.indexOf(track.id);
-    if (!_sameQueue(requestedIds)) {
-      await _loadQueue(requestedQueue, initialIndex: index);
-    } else if (_player.currentIndex != index) {
-      await _player.seek(Duration.zero, index: index);
+    return _serially(() async {
+      final requestedQueue = _normalizedQueue(track, queue);
+      final requestedIds = requestedQueue.map((item) => item.id).toList();
+      final index = requestedIds.indexOf(track.id);
+      if (!_sameQueue(requestedIds)) {
+        await _loadQueue(requestedQueue, initialIndex: index);
+      } else if (_player.currentIndex != index) {
+        await _player.seek(Duration.zero, index: index);
+      }
+      await _setSpeed(1);
+      await _playIgnoringInterruption();
+    });
+  }
+
+  Future<void> _serially(Future<void> Function() action) {
+    final next = _operation.then((_) => action());
+    _operation = next.catchError((_) {});
+    return next;
+  }
+
+  Future<void> _playIgnoringInterruption() async {
+    try {
+      await _player.play();
+    } on PlayerInterruptedException {
+      // A newer load request intentionally replaced this playback request.
     }
-    await _setSpeed(1);
-    unawaited(_player.play());
   }
 
   /// Ignores tiny drift, gently corrects medium drift, and seeks only when the

@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-/** Transcodes oversized uploads to browser-safe MP3 and guarantees storage below 5 MB. */
+/** Validates uploads, transcodes non-MP3 audio, and guarantees storage below 5 MB. */
 @Service
 public class AudioCompressionService {
   public static final long MAX_STORED_BYTES = 5_000_000L;
@@ -20,7 +20,14 @@ public class AudioCompressionService {
   private static final long MAX_BITRATE = 192_000L;
 
   public PreparedAudio prepare(MultipartFile source) throws IOException {
-    if (source.getSize() <= MAX_STORED_BYTES) {
+    if (source.getSize() <= MAX_STORED_BYTES && isMp3(source)) {
+      var input = Files.createTempFile("telugu-tunes-probe-", suffix(source.getOriginalFilename()));
+      try {
+        source.transferTo(input);
+        probeDuration(input);
+      } finally {
+        Files.deleteIfExists(input);
+      }
       return new PreparedAudio(source, source.getSize(), source.getSize(), false, null);
     }
 
@@ -52,6 +59,14 @@ public class AudioCompressionService {
       Files.deleteIfExists(input);
       if (output != null) Files.deleteIfExists(output);
     }
+  }
+
+  private boolean isMp3(MultipartFile source) {
+    var name = source.getOriginalFilename();
+    var type = source.getContentType();
+    return (name != null && name.toLowerCase(Locale.ROOT).endsWith(".mp3"))
+        || (type != null
+            && (type.equalsIgnoreCase("audio/mpeg") || type.equalsIgnoreCase("audio/mp3")));
   }
 
   private double probeDuration(Path input) throws IOException {

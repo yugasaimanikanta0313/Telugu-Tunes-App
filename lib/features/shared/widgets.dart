@@ -83,7 +83,7 @@ class Artwork extends StatelessWidget {
         ),
       ],
     );
-    if (imageUrl.isEmpty) return placeholder;
+    if (!_canLoadArtwork(imageUrl)) return placeholder;
     return ClipRRect(
       borderRadius: BorderRadius.circular(size * .18),
       child: CachedNetworkImage(
@@ -104,6 +104,12 @@ class Artwork extends StatelessWidget {
         errorWidget: (_, __, ___) => placeholder,
       ),
     );
+  }
+
+  bool _canLoadArtwork(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) return false;
+    return !uri.host.toLowerCase().endsWith('sunnxt.com');
   }
 }
 

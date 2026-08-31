@@ -115,7 +115,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         ],
       ),
     );
-    input.dispose();
+    _disposeAfterRouteTransition(input);
     if (albumName == null || albumName.isEmpty || !mounted) return;
     _album.text = albumName;
     await _pickAudio(allowMultiple: true);
@@ -149,7 +149,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         ],
       ),
     );
-    input.dispose();
+    _disposeAfterRouteTransition(input);
     if (value != null && mounted) setState(() => _album.text = value);
   }
 
@@ -519,6 +519,10 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
     }
+  }
+
+  void _disposeAfterRouteTransition(TextEditingController controller) {
+    Future<void>.delayed(const Duration(milliseconds: 400), controller.dispose);
   }
 
   String _nameFromFile(String fileName) => fileName
