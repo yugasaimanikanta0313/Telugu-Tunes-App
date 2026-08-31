@@ -298,7 +298,7 @@ class SpringBootMusicApiService implements MusicApiService {
                     Map<String, dynamic>.from(json['playlist'] as Map)),
                 voteCount: (json['voteCount'] as num?)?.toInt() ?? 0,
                 reasons:
-                    _list(json['reasons']).map((v) => v.toString()).toList(),
+                    _values(json['reasons']).map((v) => v.toString()).toList(),
               ))
           .toList();
 
@@ -818,6 +818,8 @@ class SpringBootMusicApiService implements MusicApiService {
     return value.map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
+  List<dynamic> _values(dynamic value) => value is List ? value : const [];
+
   String _errorMessage(http.Response response) {
     try {
       final body = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
@@ -902,7 +904,7 @@ class SpringBootMusicApiService implements MusicApiService {
         tracks: _list(json['tracks']).map(_track).toList(),
         ownerMemberId: json['ownerMemberId'] as String? ?? '',
         ownedByCurrentMember: json['ownedByCurrentMember'] as bool?,
-        sharedWithMemberIds: _list(json['sharedWithMemberIds'])
+        sharedWithMemberIds: _values(json['sharedWithMemberIds'])
             .map((v) => v.toString())
             .toList(),
         trackAddedByNames: (json['trackAddedByNames'] as Map? ?? const {})

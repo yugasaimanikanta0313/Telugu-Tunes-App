@@ -28,7 +28,9 @@ class _CollaborativePlaylistsScreenState
 
   Future<void> _refresh() async {
     final request = context.read<MusicController>().refreshPlaylists();
-    setState(() => _loading = request);
+    setState(() {
+      _loading = request;
+    });
     await request;
   }
 
