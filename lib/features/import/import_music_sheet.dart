@@ -286,11 +286,17 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
     if (query.isEmpty) return;
     setState(() => _askingAi = true);
     try {
-      final catalogQuery = _audioFiles.isNotEmpty &&
-              _activeSongIndex >= 0 &&
-              _activeSongIndex < _audioFiles.length
-          ? _audioFiles[_activeSongIndex].name
-          : query;
+      // The administrator may correct a noisy download filename before
+      // searching. Always prefer the current title field; use the original
+      // filename only when no title has been entered.
+      final editedTitle = _title.text.trim();
+      final catalogQuery = editedTitle.isNotEmpty
+          ? editedTitle
+          : (_audioFiles.isNotEmpty &&
+                  _activeSongIndex >= 0 &&
+                  _activeSongIndex < _audioFiles.length
+              ? _audioFiles[_activeSongIndex].name
+              : query);
       final catalog = await context
           .read<MusicController>()
           .matchMetadataCatalog(catalogQuery);
