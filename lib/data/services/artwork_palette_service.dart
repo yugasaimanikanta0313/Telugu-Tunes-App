@@ -6,7 +6,12 @@ class ArtworkPaletteService {
   final Map<String, int> _memoryCache = <String, int>{};
 
   Future<int?> dominantColor(String imageUrl) async {
-    if (imageUrl.isEmpty) return null;
+    final uri = Uri.tryParse(imageUrl);
+    if (uri == null ||
+        uri.host.isEmpty ||
+        uri.host.toLowerCase().endsWith('sunnxt.com')) {
+      return null;
+    }
     final cached = _memoryCache[imageUrl];
     if (cached != null) return cached;
     try {

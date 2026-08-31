@@ -37,6 +37,12 @@ class AudioPlaybackService {
           .listen((_) => _completed.add(null)),
       _player.errorStream.listen((error) {
         final message = error.toString();
+        if (message.contains('PIPELINE_ERROR_READ') ||
+            message.contains('data source error')) {
+          _errors.add('Refreshing the private audio connection…');
+          unawaited(_recoverPrivateStream());
+          return;
+        }
         if (message.contains('MEDIA_ELEMENT_ERROR') ||
             message.contains('Format error')) {
           _errors.add(
@@ -67,6 +73,7 @@ class AudioPlaybackService {
   DateTime? _lastHardSeekAt;
   double _speed = 1;
   Future<void> _operation = Future.value();
+  String? _recoveredStreamKey;
 
   bool get isAvailable => _apiBaseUrl.isNotEmpty;
   Stream<Duration> get positionStream => _position.stream;
@@ -108,6 +115,30 @@ class AudioPlaybackService {
       await _player.play();
     } on PlayerInterruptedException {
       // A newer load request intentionally replaced this playback request.
+    }
+  }
+
+  Future<void> _recoverPrivateStream() async {
+    if (_queueTracks.isEmpty) return;
+    final index = (_player.currentIndex ?? 0).clamp(0, _queueTracks.length - 1);
+    final track = _queueTracks[index];
+    final recoveryKey = '${track.id}:${track.audioVersion}';
+    if (_recoveredStreamKey == recoveryKey) {
+      _errors.add(
+          'The private audio connection could not be refreshed. Try playing the song again.');
+      return;
+    }
+    _recoveredStreamKey = recoveryKey;
+    final resumeAt = _player.position;
+    try {
+      await _serially(() async {
+        await _loadQueue(_queueTracks, initialIndex: index);
+        if (resumeAt > Duration.zero) await _player.seek(resumeAt);
+        await _playIgnoringInterruption();
+      });
+    } catch (_) {
+      _errors.add(
+          'The private audio connection could not be refreshed. Try playing the song again.');
     }
   }
 
