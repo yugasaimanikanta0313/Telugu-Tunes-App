@@ -1025,6 +1025,13 @@ class MusicController extends ChangeNotifier {
     return playlist;
   }
 
+  Future<void> refreshPlaylists() async {
+    if (!isAuthenticated) return;
+    final refreshed = await _repository.getPlaylists();
+    _playlists = refreshed;
+    notifyListeners();
+  }
+
   Future<void> updatePlaylist(Playlist playlist) async {
     final updated = await _repository.updatePlaylist(playlist);
     _playlists = _playlists
