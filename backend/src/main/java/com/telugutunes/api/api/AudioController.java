@@ -71,7 +71,7 @@ public class AudioController {
       return;
     }
     response.setStatus(range.partial() ? HttpServletResponse.SC_PARTIAL_CONTENT : HttpServletResponse.SC_OK);
-    response.setContentType(track.mimeType() == null ? media.mimeType() : track.mimeType());
+    response.setContentType(playbackMimeType(track.mimeType(), media.mimeType()));
     response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "inline");
     response.setHeader(HttpHeaders.ACCEPT_RANGES, "bytes");
     // Audio may be replaced while keeping the same library entry. Do not let a browser reuse an
@@ -86,6 +86,17 @@ public class AudioController {
           "bytes " + range.start() + "-" + range.end() + "/" + media.size());
     }
     storage.stream(track.driveFileId(), range.start(), range.end(), response.getOutputStream());
+  }
+
+  private String playbackMimeType(String trackMimeType, String storageMimeType) {
+    var candidate = trackMimeType == null || trackMimeType.isBlank() ? storageMimeType : trackMimeType;
+    if (candidate == null
+        || candidate.isBlank()
+        || "application/octet-stream".equalsIgnoreCase(candidate)
+        || !candidate.toLowerCase(java.util.Locale.ROOT).startsWith("audio/")) {
+      return "audio/mpeg";
+    }
+    return candidate;
   }
 
   private ByteRange range(String header, long size) {

@@ -137,7 +137,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            if (album.artworkUrl.isNotEmpty)
+                            if (canLoadArtwork(album.artworkUrl))
                               CachedNetworkImage(
                                 imageUrl: album.artworkUrl,
                                 fit: BoxFit.cover,

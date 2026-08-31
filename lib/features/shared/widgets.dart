@@ -83,7 +83,7 @@ class Artwork extends StatelessWidget {
         ),
       ],
     );
-    if (!_canLoadArtwork(imageUrl)) return placeholder;
+    if (!canLoadArtwork(imageUrl)) return placeholder;
     return ClipRRect(
       borderRadius: BorderRadius.circular(size * .18),
       child: CachedNetworkImage(
@@ -105,12 +105,12 @@ class Artwork extends StatelessWidget {
       ),
     );
   }
+}
 
-  bool _canLoadArtwork(String value) {
-    final uri = Uri.tryParse(value);
-    if (uri == null || !uri.hasScheme || uri.host.isEmpty) return false;
-    return !uri.host.toLowerCase().endsWith('sunnxt.com');
-  }
+bool canLoadArtwork(String value) {
+  final uri = Uri.tryParse(value);
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) return false;
+  return !uri.host.toLowerCase().endsWith('sunnxt.com');
 }
 
 Future<ArtworkCandidate?> showArtworkPicker(
