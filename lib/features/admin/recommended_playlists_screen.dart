@@ -116,10 +116,21 @@ class _RecommendedPlaylistsScreenState
                                     title: Text(item.subtype),
                                     subtitle: Text(
                                         '${item.tracks.length} songs${item.active ? '' : ' • Hidden'}\n${item.scheduleLabel}'),
-                                    trailing: IconButton(
-                                      tooltip: 'Edit ${item.subtype}',
-                                      onPressed: () => _edit(item),
-                                      icon: const Icon(Icons.edit_outlined),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          tooltip: 'Edit ${item.subtype}',
+                                          onPressed: () => _edit(item),
+                                          icon: const Icon(Icons.edit_outlined),
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Delete ${item.subtype}',
+                                          onPressed: () => _confirmDelete(item),
+                                          icon: const Icon(
+                                              Icons.delete_outline_rounded),
+                                        ),
+                                      ],
                                     ),
                                     children: item.tracks.isEmpty
                                         ? const [
@@ -183,6 +194,46 @@ class _RecommendedPlaylistsScreenState
       return _RecommendedPlaylistGroup(variants);
     }).toList()
       ..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+  Future<void> _confirmDelete(RecommendedPlaylist item) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Delete recommended playlist?'),
+            content: Text(
+              'Delete the ${item.subtype} subtype from ${item.name}? '
+              'Its songs and schedule will be removed from recommendations.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+
+    try {
+      await context.read<MusicController>().deleteRecommendedPlaylist(item.id);
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${item.subtype} was deleted.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete playlist: $error')),
+      );
+    }
   }
 
   Future<void> _edit(
@@ -476,14 +527,6 @@ class _RecommendedPlaylistsScreenState
                                     }))),
                           ]))),
                   actions: [
-                    if (existing != null && !createSubtype)
-                      TextButton(
-                          onPressed: () async {
-                            await music.deleteRecommendedPlaylist(existing.id);
-                            if (dialogContext.mounted)
-                              Navigator.pop(dialogContext, true);
-                          },
-                          child: const Text('Delete')),
                     TextButton(
                         onPressed: () => Navigator.pop(dialogContext, false),
                         child: const Text('Cancel')),
