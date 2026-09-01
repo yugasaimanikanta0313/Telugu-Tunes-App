@@ -45,7 +45,12 @@ public class ResilientStorageService {
   }
 
   public MediaStorageService.StoredMedia upload(MultipartFile source) throws IOException {
-    try (var prepared = compression.prepare(source)) {
+    return upload(source, false);
+  }
+
+  public MediaStorageService.StoredMedia upload(MultipartFile source, boolean preserveLargeMp3)
+      throws IOException {
+    try (var prepared = compression.prepare(source, preserveLargeMp3)) {
       var upload = prepared.file();
       var primary = provider(properties.getPrimary());
       MediaStorageService.StoredMedia primaryMedia;

@@ -39,10 +39,12 @@ public class ImportsController {
       @RequestPart(value = "musicDirector", required = false) String musicDirector,
       @RequestPart(value = "genre", required = false) String genre,
       @RequestPart(value = "artworkUrl", required = false) String artworkUrl,
-      @RequestPart(value = "sourceUrl", required = false) String sourceUrl)
+      @RequestPart(value = "sourceUrl", required = false) String sourceUrl,
+      @RequestPart(value = "allowLargeFile", required = false) Boolean allowLargeFile)
       throws IOException {
     return imports.importAudio(
-        memberId, file, title, artist, album, color, singers, musicDirector, genre, artworkUrl, sourceUrl);
+        memberId, file, title, artist, album, color, singers, musicDirector, genre, artworkUrl,
+        sourceUrl, Boolean.TRUE.equals(allowLargeFile));
   }
 
   @PostMapping("/reference")

@@ -20,6 +20,20 @@ public class AudioCompressionService {
   private static final long MAX_BITRATE = 192_000L;
 
   public PreparedAudio prepare(MultipartFile source) throws IOException {
+    return prepare(source, false);
+  }
+
+  public PreparedAudio prepare(MultipartFile source, boolean preserveLargeMp3) throws IOException {
+    if (preserveLargeMp3 && isMp3(source)) {
+      var input = Files.createTempFile("telugu-tunes-probe-", suffix(source.getOriginalFilename()));
+      try {
+        source.transferTo(input);
+        probeDuration(input);
+      } finally {
+        Files.deleteIfExists(input);
+      }
+      return new PreparedAudio(source, source.getSize(), source.getSize(), false, null);
+    }
     if (source.getSize() <= MAX_STORED_BYTES && isMp3(source)) {
       var input = Files.createTempFile("telugu-tunes-probe-", suffix(source.getOriginalFilename()));
       try {

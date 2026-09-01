@@ -63,6 +63,7 @@ public class CatalogService {
   }
 
   public HomeResponse home() {
+    ensureImportedAlbum();
     var allTracks = new ArrayList<>(tracks.findAll());
     allTracks.sort(Comparator.comparing(
         TrackDocument::createdAt,
@@ -88,6 +89,23 @@ public class CatalogService {
           automatic.stream().limit(15).map(TrackResponse::from).toList()));
     }
     return new HomeResponse(collections, albums.findAll().stream().map(this::albumResponse).toList(), latest);
+  }
+
+  private void ensureImportedAlbum() {
+    if (albums.existsById("imported-music")) return;
+    var now = Instant.now();
+    albums.save(
+        new AlbumDocument(
+            "imported-music",
+            "Imported music",
+            "Your private collection",
+            "Songs uploaded from your device.",
+            now.atZone(java.time.ZoneOffset.UTC).getYear(),
+            "7C4DFF",
+            "",
+            false,
+            List.of(),
+            now));
   }
 
   private void addMood(

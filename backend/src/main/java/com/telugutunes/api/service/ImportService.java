@@ -22,16 +22,19 @@ public class ImportService {
   private final ResilientStorageService storage;
   private final TrackRepository tracks;
   private final AlbumRepository albums;
+  private final AuthService auth;
 
   public ImportService(
       ImportJobRepository jobs,
       ResilientStorageService storage,
       TrackRepository tracks,
-      AlbumRepository albums) {
+      AlbumRepository albums,
+      AuthService auth) {
     this.jobs = jobs;
     this.storage = storage;
     this.tracks = tracks;
     this.albums = albums;
+    this.auth = auth;
   }
 
   public ImportResponse importAudio(
@@ -45,13 +48,25 @@ public class ImportService {
       String musicDirector,
       String genre,
       String artworkUrl,
-      String sourceUrl)
+      String sourceUrl,
+      boolean allowLargeFile)
       throws IOException {
     if (file.isEmpty()) {
       throw new IllegalArgumentException("Choose a non-empty audio file.");
     }
     if (file.getSize() > 50L * 1024 * 1024) {
       throw new IllegalArgumentException("The current upload limit is 50 MB.");
+    }
+    var cleanTitle = cleanOrDefault(title, titleFromFileName(file.getOriginalFilename()));
+    var cleanSingers = cleanOrEmpty(singers);
+    var cleanAlbum = cleanOrDefault(album, "Imported music");
+    if (tracks.existsByTitleIgnoreCaseAndSingersIgnoreCaseAndAlbumIgnoreCase(
+        cleanTitle, cleanSingers, cleanAlbum)) {
+      throw new IllegalArgumentException(
+          "This song already exists with the same title, singer, and album.");
+    }
+    if (allowLargeFile) {
+      auth.requireAdministrator(memberId);
     }
     if (!storage.isConfigured()) {
       return ImportResponse.from(
@@ -63,7 +78,7 @@ public class ImportService {
               ImportStatus.PENDING_CONFIGURATION,
               "Private audio storage is not configured yet. The import request has been saved."));
     }
-    var media = storage.upload(file);
+    var media = storage.upload(file, allowLargeFile);
     saveImportedTrack(
         memberId,
         media,
