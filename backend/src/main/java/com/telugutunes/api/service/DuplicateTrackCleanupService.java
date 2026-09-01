@@ -6,7 +6,6 @@ import com.telugutunes.api.repository.AlbumRepository;
 import com.telugutunes.api.repository.LyricsRepository;
 import com.telugutunes.api.repository.TrackRepository;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -40,7 +39,12 @@ public class DuplicateTrackCleanupService {
   }
 
   @EventListener(ApplicationReadyEvent.class)
-  public void removeHistoricalDuplicates() {
+  public void repairCatalog() {
+    removeHistoricalDuplicates();
+    repairImportedAlbum();
+  }
+
+  void removeHistoricalDuplicates() {
     var ordered = new ArrayList<>(tracks.findAll());
     ordered.sort(
         Comparator.comparing(
@@ -80,6 +84,90 @@ public class DuplicateTrackCleanupService {
     log.info("Removed {} duplicate track records; oldest copies were preserved.", duplicateIds.size());
   }
 
+  private void repairImportedAlbum() {
+    var imported = albums.findById("imported-music").orElse(null);
+    if (imported == null) return;
+    var importedIds = new ArrayList<String>();
+    for (var trackId : imported.trackIds()) {
+      var track = tracks.findById(trackId).orElse(null);
+      if (track == null) continue;
+      if ("Imported music".equalsIgnoreCase(track.album())) {
+        importedIds.add(trackId);
+        continue;
+      }
+      var targetId = albumId(track.album());
+      if ("imported-music".equals(targetId)) {
+        importedIds.add(trackId);
+        continue;
+      }
+      var moved =
+          tracks.save(
+              new TrackDocument(
+                  track.id(),
+                  track.title(),
+                  track.artist(),
+                  track.album(),
+                  targetId,
+                  track.duration(),
+                  track.durationSeconds(),
+                  track.artworkColor(),
+                  track.singers(),
+                  track.musicDirector(),
+                  track.genre(),
+                  track.artworkUrl(),
+                  track.sourceUrl(),
+                  track.driveFileId(),
+                  track.mimeType(),
+                  track.uploadedByMemberId(),
+                  track.createdAt()));
+      var target =
+          albums
+              .findById(targetId)
+              .orElse(
+                  new AlbumDocument(
+                      targetId,
+                      moved.album(),
+                      moved.musicDirector() == null || moved.musicDirector().isBlank()
+                          ? "Your private collection"
+                          : moved.musicDirector(),
+                      "Tracks uploaded by your members.",
+                      moved.createdAt() == null
+                          ? java.time.Year.now().getValue()
+                          : moved.createdAt().atZone(java.time.ZoneOffset.UTC).getYear(),
+                      moved.artworkColor(),
+                      moved.artworkUrl(),
+                      false,
+                      java.util.List.of(),
+                      moved.createdAt()));
+      var targetIds = new ArrayList<>(target.trackIds());
+      if (!targetIds.contains(trackId)) targetIds.add(trackId);
+      albums.save(
+          new AlbumDocument(
+              target.id(),
+              target.title(),
+              target.artist(),
+              target.description(),
+              target.year(),
+              target.artworkColor(),
+              target.artworkUrl(),
+              target.movie(),
+              targetIds,
+              target.createdAt()));
+    }
+    albums.save(
+        new AlbumDocument(
+            "imported-music",
+            "Imported music",
+            "Your private collection",
+            "Songs uploaded from your device.",
+            java.time.Year.now().getValue(),
+            "7C4DFF",
+            "",
+            false,
+            importedIds,
+            imported.createdAt()));
+  }
+
   private void deleteAudioBestEffort(TrackDocument track) {
     if (!storage.isConfigured() || track.driveFileId() == null || track.driveFileId().isBlank()) return;
     try {
@@ -95,5 +183,10 @@ public class DuplicateTrackCleanupService {
 
   private String normalize(String value) {
     return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+  }
+
+  private String albumId(String album) {
+    var value = normalize(album).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+)|(-+$)", "");
+    return value.isBlank() ? "imported-music" : value;
   }
 }
