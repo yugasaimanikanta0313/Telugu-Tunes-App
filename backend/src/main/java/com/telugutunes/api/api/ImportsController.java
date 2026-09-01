@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,20 +32,20 @@ public class ImportsController {
   public ImportResponse importAudio(
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
       @RequestPart("file") MultipartFile file,
-      @RequestPart(value = "title", required = false) String title,
-      @RequestPart(value = "artist", required = false) String artist,
-      @RequestPart(value = "album", required = false) String album,
-      @RequestPart(value = "color", required = false) String color,
-      @RequestPart(value = "singers", required = false) String singers,
-      @RequestPart(value = "musicDirector", required = false) String musicDirector,
-      @RequestPart(value = "genre", required = false) String genre,
-      @RequestPart(value = "artworkUrl", required = false) String artworkUrl,
-      @RequestPart(value = "sourceUrl", required = false) String sourceUrl,
-      @RequestPart(value = "allowLargeFile", required = false) Boolean allowLargeFile)
+      @RequestParam(value = "title", required = false) String title,
+      @RequestParam(value = "artist", required = false) String artist,
+      @RequestParam(value = "album", required = false) String album,
+      @RequestParam(value = "color", required = false) String color,
+      @RequestParam(value = "singers", required = false) String singers,
+      @RequestParam(value = "musicDirector", required = false) String musicDirector,
+      @RequestParam(value = "genre", required = false) String genre,
+      @RequestParam(value = "artworkUrl", required = false) String artworkUrl,
+      @RequestParam(value = "sourceUrl", required = false) String sourceUrl,
+      @RequestParam(value = "allowLargeFile", defaultValue = "false") boolean allowLargeFile)
       throws IOException {
     return imports.importAudio(
         memberId, file, title, artist, album, color, singers, musicDirector, genre, artworkUrl,
-        sourceUrl, Boolean.TRUE.equals(allowLargeFile));
+        sourceUrl, allowLargeFile);
   }
 
   @PostMapping("/reference")
