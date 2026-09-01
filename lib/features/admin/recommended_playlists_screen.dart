@@ -491,6 +491,62 @@ class _RecommendedPlaylistsScreenState
                               onChanged: (value) => setDialogState(() =>
                                   catalogQuery = value.trim().toLowerCase()),
                             ),
+                            const SizedBox(height: 8),
+                            ExpansionTile(
+                              initiallyExpanded: true,
+                              tilePadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.folder_copy_rounded),
+                              title: const Text(
+                                'Choose album folders',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: const Text(
+                                  'Select an album to add all of its songs'),
+                              children: music.albums.where((album) {
+                                if (catalogQuery.isEmpty) return true;
+                                return [
+                                  album.title,
+                                  album.artist,
+                                  ...album.tracks.map((track) => track.title),
+                                ]
+                                    .join(' ')
+                                    .toLowerCase()
+                                    .contains(catalogQuery);
+                              }).map((album) {
+                                final albumTrackIds = album.tracks
+                                    .map((track) => track.id)
+                                    .toSet();
+                                final selectedCount = albumTrackIds
+                                    .where(selected.contains)
+                                    .length;
+                                final allSelected = albumTrackIds.isNotEmpty &&
+                                    selectedCount == albumTrackIds.length;
+                                final partiallySelected =
+                                    selectedCount > 0 && !allSelected;
+                                return CheckboxListTile(
+                                  secondary: const Icon(Icons.album_rounded),
+                                  dense: true,
+                                  tristate: true,
+                                  value: partiallySelected ? null : allSelected,
+                                  title: Text(album.title),
+                                  subtitle: Text(
+                                    '${album.artist} • ${album.tracks.length} songs'
+                                    '${selectedCount == 0 ? '' : ' • $selectedCount selected'}',
+                                  ),
+                                  onChanged: albumTrackIds.isEmpty
+                                      ? null
+                                      : (value) => setDialogState(() {
+                                            if (value == true ||
+                                                partiallySelected) {
+                                              selected.addAll(albumTrackIds);
+                                            } else {
+                                              selected.removeAll(albumTrackIds);
+                                            }
+                                          }),
+                                );
+                              }).toList(),
+                            ),
+                            const Divider(),
                             Row(children: [
                               const Expanded(
                                   child: Text('Choose songs from catalog',
