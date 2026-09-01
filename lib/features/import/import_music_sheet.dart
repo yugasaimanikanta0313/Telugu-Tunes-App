@@ -9,17 +9,19 @@ import '../../state/music_controller.dart';
 
 const _maximumStoredAudioBytes = 5000000;
 
-void showImportMusicSheet(BuildContext context) {
+void showImportMusicSheet(BuildContext context, {Album? album}) {
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => const _ImportMusicSheet(),
+    builder: (_) => _ImportMusicSheet(album: album),
   );
 }
 
 class _ImportMusicSheet extends StatefulWidget {
-  const _ImportMusicSheet();
+  const _ImportMusicSheet({this.album});
+
+  final Album? album;
 
   @override
   State<_ImportMusicSheet> createState() => _ImportMusicSheetState();
@@ -49,6 +51,17 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
   bool _preserveLargeFiles = false;
 
   @override
+  void initState() {
+    super.initState();
+    final album = widget.album;
+    if (album != null) {
+      _album.text = album.title;
+      _artist.text = album.artist;
+      _color = album.color;
+    }
+  }
+
+  @override
   void dispose() {
     _uploadStatusTimer?.cancel();
     _url.dispose();
@@ -63,7 +76,11 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
 
   Future<void> _select(ImportSource source) async {
     if (source == ImportSource.deviceFolder) {
-      await _requestAlbumAndPickFiles();
+      if (widget.album == null) {
+        await _requestAlbumAndPickFiles();
+      } else {
+        await _pickAudio(allowMultiple: true);
+      }
       return;
     }
     if (source == ImportSource.deviceFile) {
@@ -193,7 +210,12 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         if (approved != true) return;
       }
       final drafts = files
-          .map((file) => _SongMetadataDraft(title: _nameFromFile(file.name)))
+          .map((file) => _SongMetadataDraft(
+                title: _nameFromFile(file.name),
+                artist: widget.album?.artist ?? '',
+                album: _album.text,
+                color: widget.album?.color ?? _color,
+              ))
           .toList();
       setState(() {
         _audioFiles = files;
@@ -494,17 +516,29 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Add music',
+          Text(
+              widget.album == null
+                  ? 'Add music'
+                  : 'Add songs to ${widget.album!.title}',
               style: Theme.of(context)
                   .textTheme
                   .headlineSmall
                   ?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
           Text(
-              'Audio is stored in the private Drive folder. Links only save a private import request.',
+              widget.album == null
+                  ? 'Audio is stored in the private Drive folder. Links only save a private import request.'
+                  : 'Choose one or more audio files. New songs will be appended to this album.',
               style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 18),
-          if (_selected != null)
+          if (widget.album != null)
+            _ImportOption(
+                icon: Icons.library_music_rounded,
+                title: 'Choose songs',
+                subtitle: 'Upload one or several audio files',
+                source: ImportSource.deviceFolder,
+                onTap: _select)
+          else if (_selected != null)
             _referenceForm(context)
           else ...[
             _ImportOption(
@@ -625,11 +659,12 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: _submitting ? null : _editAlbumName,
-                      tooltip: 'Edit album name',
-                      icon: const Icon(Icons.edit_rounded),
-                    ),
+                    if (widget.album == null)
+                      IconButton(
+                        onPressed: _submitting ? null : _editAlbumName,
+                        tooltip: 'Edit album name',
+                        icon: const Icon(Icons.edit_rounded),
+                      ),
                   ],
                 ),
               ),
@@ -765,6 +800,7 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
             if (_audioFiles.length == 1)
               TextField(
                 controller: _album,
+                readOnly: widget.album != null,
                 textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
                   labelText: 'Album / movie',

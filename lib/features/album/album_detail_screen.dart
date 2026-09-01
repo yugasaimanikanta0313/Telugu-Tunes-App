@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../domain/models/music_models.dart';
 import '../../state/music_controller.dart';
+import '../import/import_music_sheet.dart';
 import '../shared/widgets.dart';
 
 class AlbumDetailScreen extends StatelessWidget {
@@ -11,123 +12,137 @@ class AlbumDetailScreen extends StatelessWidget {
   final Album album;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        body: CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              expandedHeight: 330,
-              pinned: true,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  padding: const EdgeInsets.fromLTRB(24, 88, 24, 22),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        colorFromHex(album.color).withOpacity(.88),
-                        const Color(0xff101014)
-                      ],
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Artwork(
-                          color: album.color,
-                          label: album.title,
-                          imageUrl: album.artworkUrl,
-                          size: 148,
-                          icon: album.isMovie
-                              ? Icons.local_movies_rounded
-                              : Icons.album_rounded,
-                          heroTag: 'album-' + album.id,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(album.isMovie ? 'MOVIE SOUNDTRACK' : 'ALBUM',
-                          style: const TextStyle(
-                              fontSize: 11,
-                              letterSpacing: 1.1,
-                              fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 5),
-                      Text(album.title,
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(fontWeight: FontWeight.w900)),
+  Widget build(BuildContext context) {
+    final matchingAlbums = context
+        .watch<MusicController>()
+        .albums
+        .where((item) => item.id == this.album.id);
+    final album = matchingAlbums.isEmpty ? this.album : matchingAlbums.first;
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 330,
+            pinned: true,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                padding: const EdgeInsets.fromLTRB(24, 88, 24, 22),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      colorFromHex(album.color).withOpacity(.88),
+                      const Color(0xff101014)
                     ],
                   ),
                 ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                        album.artist +
-                            ' • ' +
-                            album.year.toString() +
-                            ' • ' +
-                            album.tracks.length.toString() +
-                            ' songs',
-                        style: Theme.of(context).textTheme.bodyMedium),
-                    const SizedBox(height: 10),
-                    Text(album.description,
+                    Center(
+                      child: Artwork(
+                        color: album.color,
+                        label: album.title,
+                        imageUrl: album.artworkUrl,
+                        size: 148,
+                        icon: album.isMovie
+                            ? Icons.local_movies_rounded
+                            : Icons.album_rounded,
+                        heroTag: 'album-' + album.id,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(album.isMovie ? 'MOVIE SOUNDTRACK' : 'ALBUM',
+                        style: const TextStyle(
+                            fontSize: 11,
+                            letterSpacing: 1.1,
+                            fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 5),
+                    Text(album.title,
                         style: Theme.of(context)
                             .textTheme
-                            .bodyMedium
-                            ?.copyWith(height: 1.4)),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: album.tracks.isEmpty
-                                ? null
-                                : () => context
-                                    .read<MusicController>()
-                                    .play(album.tracks.first),
-                            icon: const Icon(Icons.play_arrow_rounded),
-                            label: const Text('Play'),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        IconButton.filledTonal(
-                            onPressed: () =>
-                                context.read<MusicController>().toggleShuffle(),
-                            tooltip: 'Shuffle',
-                            icon: const Icon(Icons.shuffle_rounded)),
-                        IconButton.filledTonal(
-                            onPressed: () => _showAlbumActions(context, album),
-                            tooltip: 'More',
-                            icon: const Icon(Icons.more_horiz_rounded)),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
+                            .headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.w900)),
                   ],
                 ),
               ),
             ),
-            SliverList.builder(
-              itemCount: album.tracks.length,
-              itemBuilder: (context, index) {
-                final track = album.tracks[index];
-                return TrackTile(
-                    track: track,
-                    index: index + 1,
-                    onTap: () => context.read<MusicController>().play(track),
-                    onMore: () => showTrackActions(context, track));
-              },
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                      album.artist +
+                          ' • ' +
+                          album.year.toString() +
+                          ' • ' +
+                          album.tracks.length.toString() +
+                          ' songs',
+                      style: Theme.of(context).textTheme.bodyMedium),
+                  const SizedBox(height: 10),
+                  Text(album.description,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(height: 1.4)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: album.tracks.isEmpty
+                              ? null
+                              : () => context
+                                  .read<MusicController>()
+                                  .play(album.tracks.first),
+                          icon: const Icon(Icons.play_arrow_rounded),
+                          label: const Text('Play'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      if (context.read<MusicController>().isAdmin)
+                        IconButton.filledTonal(
+                          onPressed: () =>
+                              showImportMusicSheet(context, album: album),
+                          tooltip: 'Add songs',
+                          icon: const Icon(Icons.library_add_rounded),
+                        ),
+                      IconButton.filledTonal(
+                          onPressed: () =>
+                              context.read<MusicController>().toggleShuffle(),
+                          tooltip: 'Shuffle',
+                          icon: const Icon(Icons.shuffle_rounded)),
+                      IconButton.filledTonal(
+                          onPressed: () => _showAlbumActions(context, album),
+                          tooltip: 'More',
+                          icon: const Icon(Icons.more_horiz_rounded)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                ],
+              ),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 28)),
-          ],
-        ),
-      );
+          ),
+          SliverList.builder(
+            itemCount: album.tracks.length,
+            itemBuilder: (context, index) {
+              final track = album.tracks[index];
+              return TrackTile(
+                  track: track,
+                  index: index + 1,
+                  onTap: () => context.read<MusicController>().play(track),
+                  onMore: () => showTrackActions(context, track));
+            },
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 28)),
+        ],
+      ),
+    );
+  }
 
   void _showAlbumActions(BuildContext context, Album album) {
     final controller = context.read<MusicController>();
@@ -170,6 +185,15 @@ class AlbumDetailScreen extends StatelessWidget {
             ),
             if (controller.isAdmin) ...[
               const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.library_add_rounded),
+                title: const Text('Add songs to this album'),
+                subtitle: const Text('Upload one or several audio files'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  showImportMusicSheet(context, album: album);
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
                 title: const Text('Edit album details'),
