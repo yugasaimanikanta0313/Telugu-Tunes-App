@@ -54,6 +54,9 @@ abstract class MusicRepository {
   });
   Future<Uint8List> exportBackup();
   Future<void> restoreBackup(Uint8List bytes);
+  Future<MetadataCatalogImportResult> uploadMetadataCatalog(
+      String fileName, Uint8List bytes);
+  Future<CatalogTrackMetadata?> matchMetadataCatalog(String fileName);
   Future<ImportReceipt> importMusic(ImportRequest request);
   Future<ImportReceipt> uploadAudio(
     String fileName,
@@ -67,9 +70,11 @@ abstract class MusicRepository {
     required String genre,
     required String artworkUrl,
     required String sourceUrl,
+    required bool allowLargeFile,
   });
   Future<void> deleteTrack(String trackId);
   Future<TrackMetadataSuggestion> suggestMetadata(String query);
+  Future<TrackMetadataSuggestion> suggestYouTubeMetadata(String query);
   Future<ListeningRoom> createRoom(String name,
       {String? trackId, bool isPublic = false});
   Future<ListeningRoom> joinRoom(String inviteCode);
@@ -206,6 +211,13 @@ class SpringBootMusicRepository implements MusicRepository {
   @override
   Future<void> restoreBackup(Uint8List bytes) => _api.restoreBackup(bytes);
   @override
+  Future<MetadataCatalogImportResult> uploadMetadataCatalog(
+          String fileName, Uint8List bytes) =>
+      _api.uploadMetadataCatalog(fileName, bytes);
+  @override
+  Future<CatalogTrackMetadata?> matchMetadataCatalog(String fileName) =>
+      _api.matchMetadataCatalog(fileName);
+  @override
   Future<ImportReceipt> importMusic(ImportRequest request) =>
       _api.importMusic(request);
   @override
@@ -218,7 +230,8 @@ class SpringBootMusicRepository implements MusicRepository {
           required String musicDirector,
           required String genre,
           required String artworkUrl,
-          required String sourceUrl}) =>
+          required String sourceUrl,
+          required bool allowLargeFile}) =>
       _api.uploadAudio(fileName, bytes,
           title: title,
           artist: artist,
@@ -228,12 +241,16 @@ class SpringBootMusicRepository implements MusicRepository {
           musicDirector: musicDirector,
           genre: genre,
           artworkUrl: artworkUrl,
-          sourceUrl: sourceUrl);
+          sourceUrl: sourceUrl,
+          allowLargeFile: allowLargeFile);
   @override
   Future<void> deleteTrack(String trackId) => _api.deleteTrack(trackId);
   @override
   Future<TrackMetadataSuggestion> suggestMetadata(String query) =>
       _api.suggestMetadata(query);
+  @override
+  Future<TrackMetadataSuggestion> suggestYouTubeMetadata(String query) =>
+      _api.suggestYouTubeMetadata(query);
   @override
   Future<ListeningRoom> createRoom(String name,
           {String? trackId, bool isPublic = false}) =>
@@ -614,6 +631,20 @@ class MockMusicRepository implements MusicRepository {
 
   @override
   Future<void> restoreBackup(Uint8List bytes) async {}
+  @override
+  Future<MetadataCatalogImportResult> uploadMetadataCatalog(
+          String fileName, Uint8List bytes) async =>
+      const MetadataCatalogImportResult(
+        imported: 0,
+        updated: 0,
+        total: 0,
+        bucketStored: false,
+        objectKey: '',
+        message: 'Connect the backend to upload a metadata catalog.',
+      );
+  @override
+  Future<CatalogTrackMetadata?> matchMetadataCatalog(String fileName) async =>
+      null;
 
   @override
   Future<List<Track>> search(String query) async {
@@ -653,7 +684,8 @@ class MockMusicRepository implements MusicRepository {
           required String musicDirector,
           required String genre,
           required String artworkUrl,
-          required String sourceUrl}) async =>
+          required String sourceUrl,
+          required bool allowLargeFile}) async =>
       ImportReceipt(
         source: ImportSource.deviceFile,
         message: '$fileName selected for a local demo import.',
@@ -681,6 +713,9 @@ class MockMusicRepository implements MusicRepository {
         notice: 'Connect the private API to request AI suggestions.',
         artworkCandidates: const [],
       );
+  @override
+  Future<TrackMetadataSuggestion> suggestYouTubeMetadata(String query) =>
+      suggestMetadata(query);
 
   @override
   Future<ListeningRoom> createRoom(String name,

@@ -68,6 +68,9 @@ abstract class MusicApiService {
   });
   Future<Uint8List> exportBackup();
   Future<void> restoreBackup(Uint8List bytes);
+  Future<MetadataCatalogImportResult> uploadMetadataCatalog(
+      String fileName, Uint8List bytes);
+  Future<CatalogTrackMetadata?> matchMetadataCatalog(String fileName);
   Future<ImportReceipt> importMusic(ImportRequest request);
   Future<ImportReceipt> uploadAudio(
     String fileName,
@@ -81,9 +84,11 @@ abstract class MusicApiService {
     required String genre,
     required String artworkUrl,
     required String sourceUrl,
+    required bool allowLargeFile,
   });
   Future<void> deleteTrack(String trackId);
   Future<TrackMetadataSuggestion> suggestMetadata(String query);
+  Future<TrackMetadataSuggestion> suggestYouTubeMetadata(String query);
   Future<ListeningRoom> createRoom(String name,
       {String? trackId, bool isPublic = false});
   Future<ListeningRoom> joinRoom(String inviteCode);
@@ -556,6 +561,29 @@ class SpringBootMusicApiService implements MusicApiService {
   }
 
   @override
+  Future<MetadataCatalogImportResult> uploadMetadataCatalog(
+      String fileName, Uint8List bytes) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse(config.baseUrl + '/admin/metadata-catalog/upload'),
+    )
+      ..headers.addAll(_headers)
+      ..files
+          .add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
+    final response = await http.Response.fromStream(await request.send());
+    return MetadataCatalogImportResult.fromJson(_decodeMap(response));
+  }
+
+  @override
+  Future<CatalogTrackMetadata?> matchMetadataCatalog(String fileName) async {
+    final uri = Uri.parse(config.baseUrl + '/admin/metadata-catalog/match')
+        .replace(queryParameters: {'fileName': fileName});
+    final response = await _client.get(uri, headers: _headers);
+    if (response.statusCode == 204 || response.statusCode == 404) return null;
+    return CatalogTrackMetadata.fromJson(_decodeMap(response));
+  }
+
+  @override
   Future<ImportReceipt> importMusic(ImportRequest request) async {
     final body = await _postMap('/imports/reference', {
       'source': request.source.name,
@@ -581,6 +609,7 @@ class SpringBootMusicApiService implements MusicApiService {
     required String genre,
     required String artworkUrl,
     required String sourceUrl,
+    required bool allowLargeFile,
   }) async {
     final request = http.MultipartRequest(
       'POST',
@@ -599,6 +628,7 @@ class SpringBootMusicApiService implements MusicApiService {
         'genre': genre,
         'artworkUrl': artworkUrl,
         'sourceUrl': sourceUrl,
+        'allowLargeFile': allowLargeFile.toString(),
       });
     final response = await http.Response.fromStream(await request.send());
     final body = _decodeMap(response);
@@ -627,33 +657,60 @@ class SpringBootMusicApiService implements MusicApiService {
   @override
   Future<TrackMetadataSuggestion> suggestMetadata(String query) async {
     final body = await _postMap('/assistant/metadata', {'query': query});
-    return TrackMetadataSuggestion(
-      title: body['title'] as String? ?? query,
-      artist: body['artist'] as String? ?? '',
-      album: body['album'] as String? ?? '',
-      singers: body['singers'] as String? ?? '',
-      musicDirector: body['musicDirector'] as String? ?? '',
-      genre: body['genre'] as String? ?? '',
-      year: (body['year'] as num?)?.toInt() ?? 0,
-      color: body['color'] as String? ?? '7C4DFF',
-      thumbnailUrl: body['thumbnailUrl'] as String? ?? '',
-      sourceUrl: body['sourceUrl'] as String? ?? '',
-      source: body['source'] as String? ?? 'Manual',
-      generated: body['generated'] as bool? ?? false,
-      notice: body['notice'] as String? ?? '',
-      artworkCandidates: (body['artworkCandidates'] as List? ?? const [])
-          .whereType<Map>()
-          .map((item) => ArtworkCandidate(
-                imageUrl: item['imageUrl'] as String? ?? '',
-                title: item['title'] as String? ?? '',
-                artist: item['artist'] as String? ?? '',
-                album: item['album'] as String? ?? '',
-                source: item['source'] as String? ?? '',
-                sourceUrl: item['sourceUrl'] as String? ?? '',
-              ))
-          .where((item) => item.imageUrl.isNotEmpty)
-          .toList(),
+    return _metadataSuggestion(body, fallbackTitle: query);
+  }
+
+  TrackMetadataSuggestion _metadataSuggestion(Map<String, dynamic> body,
+          {String fallbackTitle = ''}) =>
+      TrackMetadataSuggestion(
+        title: body['title'] as String? ?? fallbackTitle,
+        artist: body['artist'] as String? ?? '',
+        album: body['album'] as String? ?? '',
+        singers: body['singers'] as String? ?? '',
+        musicDirector: body['musicDirector'] as String? ?? '',
+        genre: body['genre'] as String? ?? '',
+        year: (body['year'] as num?)?.toInt() ?? 0,
+        color: body['color'] as String? ?? '7C4DFF',
+        thumbnailUrl: body['thumbnailUrl'] as String? ?? '',
+        sourceUrl: body['sourceUrl'] as String? ?? '',
+        source: body['source'] as String? ?? 'Manual',
+        generated: body['generated'] as bool? ?? false,
+        notice: body['notice'] as String? ?? '',
+        artworkCandidates: (body['artworkCandidates'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => ArtworkCandidate(
+                  imageUrl: item['imageUrl'] as String? ?? '',
+                  title: item['title'] as String? ?? '',
+                  artist: item['artist'] as String? ?? '',
+                  album: item['album'] as String? ?? '',
+                  source: item['source'] as String? ?? '',
+                  sourceUrl: item['sourceUrl'] as String? ?? '',
+                ))
+            .where((item) => item.imageUrl.isNotEmpty)
+            .toList(),
+      );
+
+  @override
+  Future<TrackMetadataSuggestion> suggestYouTubeMetadata(String query) async {
+    final requestBody = jsonEncode({'query': query});
+    final headers = {..._headers, 'Content-Type': 'application/json'};
+    var response = await _client.post(
+      Uri.parse('${config.baseUrl}/assistant/metadata/youtube'),
+      headers: headers,
+      body: requestBody,
     );
+    // Older deployed backends predate the dedicated YouTube-only endpoint.
+    // Their existing metadata route already performs a YouTube lookup, so use
+    // it as a compatibility fallback instead of surfacing a 404 to the user.
+    if (response.statusCode == 404) {
+      response = await _client.post(
+        Uri.parse('${config.baseUrl}/assistant/metadata'),
+        headers: headers,
+        body: requestBody,
+      );
+    }
+    final body = _decodeMap(response);
+    return _metadataSuggestion(body);
   }
 
   @override

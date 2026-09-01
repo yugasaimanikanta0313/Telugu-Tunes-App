@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import '../../domain/models/music_models.dart';
 import '../../state/music_controller.dart';
-import '../shared/widgets.dart';
 
 const _maximumStoredAudioBytes = 5000000;
 
@@ -34,8 +33,6 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
   final _singers = TextEditingController();
   final _musicDirector = TextEditingController();
   final _genre = TextEditingController();
-  final _youtubeUrl = TextEditingController();
-  final _artworkUrl = TextEditingController();
   ImportSource? _selected;
   List<PlatformFile> _audioFiles = [];
   List<_SongMetadataDraft> _songDrafts = [];
@@ -43,13 +40,13 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
   String _color = '7C4DFF';
   String _metadataNotice = '';
   String _metadataSource = '';
-  String _sourceUrl = '';
   bool _submitting = false;
   bool _askingAi = false;
   Timer? _uploadStatusTimer;
   int _uploadElapsedSeconds = 0;
   int _uploadFileIndex = 0;
   String _uploadStage = '';
+  bool _preserveLargeFiles = false;
 
   @override
   void dispose() {
@@ -61,8 +58,6 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
     _singers.dispose();
     _musicDirector.dispose();
     _genre.dispose();
-    _youtubeUrl.dispose();
-    _artworkUrl.dispose();
     super.dispose();
   }
 
@@ -205,141 +200,39 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         _songDrafts = drafts;
         _activeSongIndex = 0;
       });
-      await _prefillFromCatalog(files);
       _loadDraft(0);
     } catch (error) {
       _showError(error);
     }
   }
 
-  Future<void> _prefillFromCatalog(List<PlatformFile> files) async {
-    if (!context.read<MusicController>().remoteMode) return;
-    var matched = 0;
-    var youtubeFallbacks = 0;
-    final drafts = List<_SongMetadataDraft>.from(_songDrafts);
-    for (var index = 0; index < files.length; index++) {
-      try {
-        final metadata = await context
-            .read<MusicController>()
-            .matchMetadataCatalog(files[index].name);
-        if (metadata != null) {
-          matched++;
-          drafts[index] = _SongMetadataDraft(
-            title: metadata.songName.isEmpty
-                ? drafts[index].title
-                : metadata.songName,
-            artist: metadata.primaryArtist,
-            singers: metadata.singers,
-            musicDirector: metadata.musicDirector,
-            genre: metadata.genre,
-            metadataSource: 'Excel metadata catalog',
-            metadataNotice: 'Matched ${files[index].name}',
-          );
-          continue;
-        }
-
-        final fallback = await context
-            .read<MusicController>()
-            .suggestYouTubeMetadata(_nameFromFile(files[index].name));
-        final hasFallback = fallback.artist.isNotEmpty ||
-            fallback.album.isNotEmpty ||
-            fallback.singers.isNotEmpty;
-        if (!hasFallback) continue;
-        youtubeFallbacks++;
-        drafts[index] = _SongMetadataDraft(
-          title: fallback.title.isEmpty ? drafts[index].title : fallback.title,
-          artist: fallback.artist,
-          singers: fallback.singers,
-          musicDirector: fallback.musicDirector,
-          genre: fallback.genre,
-          artworkUrl: fallback.artworkCandidates.isEmpty
-              ? fallback.thumbnailUrl
-              : fallback.artworkCandidates.first.imageUrl,
-          color: fallback.color,
-          sourceUrl: fallback.sourceUrl,
-          metadataSource: 'YouTube fallback',
-          metadataNotice: 'No Excel match; review the fetched details.',
-        );
-      } catch (_) {
-        // An unmatched or temporarily unavailable catalog must never block upload.
-      }
-    }
-    if (!mounted) return;
-    setState(() {
-      _songDrafts = drafts;
-      if (matched > 0 || youtubeFallbacks > 0) {
-        _metadataSource = 'Excel first';
-        _metadataNotice = '$matched Excel matches, '
-            '$youtubeFallbacks YouTube fallbacks for ${files.length} songs.';
-      }
-    });
-  }
-
   Future<void> _askAi() async {
-    final query = _youtubeUrl.text.trim().isNotEmpty
-        ? _youtubeUrl.text.trim()
-        : _title.text.trim().isNotEmpty
-            ? _title.text.trim()
-            : (_audioFiles.isEmpty
-                ? ''
-                : _nameFromFile(_audioFiles.first.name));
+    final query = _title.text.trim();
     if (query.isEmpty) return;
     setState(() => _askingAi = true);
     try {
-      // The administrator may correct a noisy download filename before
-      // searching. Always prefer the current title field; use the original
-      // filename only when no title has been entered.
-      final editedTitle = _title.text.trim();
-      final catalogQuery = editedTitle.isNotEmpty
-          ? editedTitle
-          : (_audioFiles.isNotEmpty &&
-                  _activeSongIndex >= 0 &&
-                  _activeSongIndex < _audioFiles.length
-              ? _audioFiles[_activeSongIndex].name
-              : query);
-      final catalog = await context
-          .read<MusicController>()
-          .matchMetadataCatalog(catalogQuery);
+      final catalog =
+          await context.read<MusicController>().matchMetadataCatalog(query);
       if (catalog != null) {
         if (!mounted) return;
         setState(() {
-          _title.text =
-              catalog.songName.isEmpty ? _title.text : catalog.songName;
           _artist.text = catalog.primaryArtist;
-          _album.text = catalog.album;
           _singers.text = catalog.singers;
           _musicDirector.text = catalog.musicDirector;
           _genre.text = catalog.genre;
           _metadataSource = 'Excel metadata catalog';
           _metadataNotice =
-              'Matched the uploaded catalog. YouTube was not used.';
+              'Matched “${_title.text.trim()}”. Review the details, then choose Save & next.';
         });
         _saveActiveDraft();
         return;
       }
-
-      final result =
-          await context.read<MusicController>().suggestMetadata(query);
-      if (!mounted) return;
-      final currentArtwork = _artworkUrl.text.trim();
-      final selectedCover = result.artworkCandidates.isEmpty
-          ? null
-          : await showArtworkPicker(context, result.artworkCandidates);
       if (!mounted) return;
       setState(() {
-        // A YouTube video title is often promotional text, so never replace the member's title.
-        _artist.text = result.artist;
-        _album.text = result.album;
-        _singers.text = result.singers;
-        _musicDirector.text = result.musicDirector;
-        _genre.text = result.genre;
-        _color = result.color;
-        _artworkUrl.text = selectedCover?.imageUrl ?? currentArtwork;
-        _sourceUrl = result.sourceUrl;
-        _metadataSource = '${result.source} fallback';
-        _metadataNotice = 'No Excel catalog match. ${result.notice}';
+        _metadataSource = 'Excel metadata catalog';
+        _metadataNotice =
+            'No Excel match for “${_title.text.trim()}”. Edit the song title and try again.';
       });
-      _saveActiveDraft();
     } catch (error) {
       _showError(error);
     } finally {
@@ -356,6 +249,9 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
       _showMessage('Enter a title for song ${incomplete + 1}.');
       return;
     }
+    final preserveLargeFiles = await _confirmLargeUploads();
+    if (preserveLargeFiles == null || !mounted) return;
+    _preserveLargeFiles = preserveLargeFiles;
     _startUploadStatus();
     try {
       final controller = context.read<MusicController>();
@@ -381,8 +277,10 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
           singers: draft.singers,
           musicDirector: draft.musicDirector,
           genre: draft.genre,
-          artworkUrl: draft.artworkUrl,
-          sourceUrl: draft.sourceUrl,
+          artworkUrl: '',
+          sourceUrl: '',
+          allowLargeFile: preserveLargeFiles &&
+              (file.bytes?.length ?? file.size) > _maximumStoredAudioBytes,
         );
         receipts.add(receipt);
       }
@@ -407,15 +305,13 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
     _songDrafts[_activeSongIndex] = _SongMetadataDraft(
       title: _title.text.trim(),
       artist: _artist.text.trim(),
+      album: _album.text.trim(),
       singers: _singers.text.trim(),
       musicDirector: _musicDirector.text.trim(),
       genre: _genre.text.trim(),
-      youtubeUrl: _youtubeUrl.text.trim(),
-      artworkUrl: _artworkUrl.text.trim(),
       color: _color,
       metadataNotice: _metadataNotice,
       metadataSource: _metadataSource,
-      sourceUrl: _sourceUrl,
     );
   }
 
@@ -423,17 +319,15 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
     final draft = _songDrafts[index];
     _title.text = draft.title;
     _artist.text = draft.artist;
+    _album.text = draft.album;
     _singers.text = draft.singers;
     _musicDirector.text = draft.musicDirector;
     _genre.text = draft.genre;
-    _youtubeUrl.text = draft.youtubeUrl;
-    _artworkUrl.text = draft.artworkUrl;
     _color = draft.color;
     _metadataNotice = draft.metadataNotice.isEmpty
         ? 'Review this song’s details. Each file keeps its own metadata.'
         : draft.metadataNotice;
     _metadataSource = draft.metadataSource;
-    _sourceUrl = draft.sourceUrl;
   }
 
   void _goToSong(int index) {
@@ -468,13 +362,53 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
         _uploadElapsedSeconds++;
         final file = _audioFiles[_uploadFileIndex];
         final bytes = file.bytes?.length ?? file.size;
-        if (_uploadElapsedSeconds >= 12 && bytes > _maximumStoredAudioBytes) {
+        if (_uploadElapsedSeconds >= 12 &&
+            bytes > _maximumStoredAudioBytes &&
+            _preserveLargeFiles) {
+          _uploadStage =
+              'Administrator approved original-quality upload to OCI…';
+        } else if (_uploadElapsedSeconds >= 12 &&
+            bytes > _maximumStoredAudioBytes) {
           _uploadStage = 'Compressing to MP3 below 5 MB, then saving to OCI…';
         } else if (_uploadElapsedSeconds >= 12) {
           _uploadStage = 'Saving the song to OCI storage…';
         }
       });
     });
+  }
+
+  Future<bool?> _confirmLargeUploads() async {
+    final largeFiles = _audioFiles
+        .where((file) =>
+            (file.bytes?.length ?? file.size) > _maximumStoredAudioBytes)
+        .toList(growable: false);
+    if (largeFiles.isEmpty) return false;
+    final largestBytes = largeFiles
+        .map((file) => file.bytes?.length ?? file.size)
+        .reduce((left, right) => left > right ? left : right);
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Administrator approval required'),
+        content: Text(
+          '${largeFiles.length} selected song${largeFiles.length == 1 ? '' : 's'} exceed 5 MB. '
+          'The largest is ${_megabytes(largestBytes)}. Approve uploading the original files without compression? '
+          'Each file will still upload separately and must be below 50 MB.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.admin_panel_settings_rounded),
+            label: const Text('Approve original sizes'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _stopUploadStatus() {
@@ -716,27 +650,6 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
             const SizedBox(height: 10),
             _metadataFields(context),
             const SizedBox(height: 10),
-            TextField(
-              controller: _youtubeUrl,
-              keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                labelText: 'YouTube song URL (optional, best match)',
-                hintText: 'https://www.youtube.com/watch?v=...',
-                prefixIcon: Icon(Icons.smart_display_rounded),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _artworkUrl,
-              keyboardType: TextInputType.url,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Artwork URL (optional)',
-                helperText:
-                    'You can replace the suggested cover before upload.',
-                prefixIcon: Icon(Icons.image_outlined),
-              ),
-            ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _askingAi ? null : _askAi,
@@ -744,15 +657,10 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
                   ? const SizedBox.square(
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.auto_awesome_rounded),
-              label: Text(_askingAi
-                  ? 'Finding details…'
-                  : 'Find details and choose cover'),
+                  : const Icon(Icons.table_view_rounded),
+              label: Text(
+                  _askingAi ? 'Searching Excel…' : 'Find details in Excel'),
             ),
-            if (_artworkUrl.text.trim().isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _metadataPreview(context),
-            ],
             if (_metadataNotice.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
@@ -900,33 +808,6 @@ class _ImportMusicSheetState extends State<_ImportMusicSheet> {
           );
         },
       );
-
-  Widget _metadataPreview(BuildContext context) => Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Artwork(
-              color: _color,
-              label: _album.text.trim().isEmpty
-                  ? _title.text.trim()
-                  : _album.text.trim(),
-              imageUrl: _artworkUrl.text.trim(),
-              size: 72,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Square catalog artwork is preferred. YouTube thumbnails are not used. The image is linked, not copied into storage.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ),
-      );
 }
 
 String _megabytes(int bytes) => '${(bytes / 1000000).toStringAsFixed(2)} MB';
@@ -935,28 +816,24 @@ class _SongMetadataDraft {
   const _SongMetadataDraft({
     required this.title,
     this.artist = '',
+    this.album = '',
     this.singers = '',
     this.musicDirector = '',
     this.genre = '',
-    this.youtubeUrl = '',
-    this.artworkUrl = '',
     this.color = '7C4DFF',
     this.metadataNotice = '',
     this.metadataSource = '',
-    this.sourceUrl = '',
   });
 
   final String title;
   final String artist;
+  final String album;
   final String singers;
   final String musicDirector;
   final String genre;
-  final String youtubeUrl;
-  final String artworkUrl;
   final String color;
   final String metadataNotice;
   final String metadataSource;
-  final String sourceUrl;
 }
 
 class _ImportOption extends StatelessWidget {

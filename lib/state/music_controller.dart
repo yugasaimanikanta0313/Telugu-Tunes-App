@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/repositories/music_repository.dart';
 import '../data/services/audio_playback_service.dart';
@@ -20,6 +21,7 @@ class MusicController extends ChangeNotifier {
     this.memberId = '',
     this.isAdmin = false,
   }) {
+    unawaited(_restoreAppearance());
     _palette = ArtworkPaletteService();
     _offline = OfflineDownloadService(apiBaseUrl, authToken);
     _audio = AudioPlaybackService(
@@ -111,6 +113,7 @@ class MusicController extends ChangeNotifier {
   bool shuffleEnabled = false;
   bool repeatEnabled = false;
   int themeColorValue = 0xffe15184;
+  bool useLightTheme = false;
   RoomConnectionStatus roomConnectionStatus = RoomConnectionStatus.disconnected;
   int roomDriftMs = 0;
   TrackLyrics? currentLyrics;
@@ -148,6 +151,21 @@ class MusicController extends ChangeNotifier {
   bool isFavorite(Track track) => favorites.contains(track.id);
   bool isDownloaded(Track track) => downloaded.contains(track.id);
   bool isDownloading(Track track) => downloadProgress.containsKey(track.id);
+
+  Future<void> _restoreAppearance() async {
+    final preferences = await SharedPreferences.getInstance();
+    useLightTheme = preferences.getBool('use_light_theme') ?? false;
+    notifyListeners();
+  }
+
+  Future<void> setLightTheme(bool value) async {
+    if (useLightTheme == value) return;
+    useLightTheme = value;
+    notifyListeners();
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool('use_light_theme', value);
+  }
+
   Duration get position => _position;
   Duration? get sleepRemaining => sleepEndsAt == null
       ? null
@@ -928,6 +946,7 @@ class MusicController extends ChangeNotifier {
     required String genre,
     required String artworkUrl,
     required String sourceUrl,
+    required bool allowLargeFile,
   }) async {
     final receipt = await _repository.uploadAudio(
       fileName,
@@ -941,6 +960,7 @@ class MusicController extends ChangeNotifier {
       genre: genre,
       artworkUrl: artworkUrl,
       sourceUrl: sourceUrl,
+      allowLargeFile: allowLargeFile,
     );
     imports.insert(0, receipt);
     await load();
@@ -1012,8 +1032,18 @@ class MusicController extends ChangeNotifier {
     await load(announce: true);
   }
 
+  Future<MetadataCatalogImportResult> uploadMetadataCatalog(
+          String fileName, Uint8List bytes) =>
+      _repository.uploadMetadataCatalog(fileName, bytes);
+
+  Future<CatalogTrackMetadata?> matchMetadataCatalog(String fileName) =>
+      _repository.matchMetadataCatalog(fileName);
+
   Future<TrackMetadataSuggestion> suggestMetadata(String query) =>
       _repository.suggestMetadata(query);
+
+  Future<TrackMetadataSuggestion> suggestYouTubeMetadata(String query) =>
+      _repository.suggestYouTubeMetadata(query);
 
   Future<void> askAssistant(String prompt) async {
     assistantReply = await _repository.askAssistant(prompt);
