@@ -13,5 +13,6 @@ public record MetadataCatalogEntry(
     String singers,
     String musicDirector,
     String genre,
+    String artworkUrl,
     String normalizedSongName,
     Instant updatedAt) {}
