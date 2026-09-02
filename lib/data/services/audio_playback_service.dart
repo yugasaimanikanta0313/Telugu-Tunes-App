@@ -25,7 +25,11 @@ class AudioPlaybackService {
     required Future<String?> Function(String trackId) localPathForTrack,
   }) : _localPathForTrack = localPathForTrack {
     if (kIsWeb) {
-      unawaited(_player.setWebCrossOrigin(WebCrossOrigin.useCredentials));
+      // Browser playback is authorized by the short-lived query-string ticket
+      // created in _remoteUriForTrack. Requesting cookies as well makes the
+      // media element use the stricter credentialed CORS mode and can cause an
+      // otherwise valid MP3 to fail with MEDIA_ELEMENT_ERROR in Chrome.
+      unawaited(_player.setWebCrossOrigin(WebCrossOrigin.anonymous));
     }
     _subscriptions = [
       _player.positionStream.listen((value) => _position.add(value)),
@@ -111,11 +115,14 @@ class AudioPlaybackService {
   }
 
   Future<void> _playIgnoringInterruption() async {
-    try {
-      await _player.play();
-    } on PlayerInterruptedException {
-      // A newer load request intentionally replaced this playback request.
-    }
+    // AudioPlayer.play completes only when playback stops or reaches the end.
+    // Do not hold the serialized command queue for the duration of a song,
+    // otherwise a later track tap waits until the previous song finishes.
+    unawaited(_player.play().catchError((error) {
+      if (error is! PlayerInterruptedException) {
+        _errors.add(error.toString());
+      }
+    }));
   }
 
   Future<void> _recoverPrivateStream() async {

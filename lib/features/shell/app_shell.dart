@@ -14,7 +14,7 @@ import '../search/search_screen.dart';
 import '../settings/settings_screen.dart';
 import '../shared/widgets.dart';
 
-class AppShell extends StatelessWidget {
+class AppShell extends StatefulWidget {
   const AppShell({super.key, this.onSignOut, this.onSignIn});
 
   final Future<void> Function()? onSignOut;
@@ -36,26 +36,33 @@ class AppShell extends StatelessWidget {
   ];
 
   @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  final _pageNavigatorKeys =
+      List.generate(5, (_) => GlobalKey<NavigatorState>());
+
+  @override
   Widget build(BuildContext context) {
     final controller = context.watch<MusicController>();
     final pages = [
-      _primaryPages[0],
-      _primaryPages[1],
+      AppShell._primaryPages[0],
+      AppShell._primaryPages[1],
       controller.isAuthenticated
-          ? _primaryPages[2]
+          ? AppShell._primaryPages[2]
           : _SignInRequiredScreen(
-              feature: 'playlists and favorites', onSignIn: onSignIn),
+              feature: 'playlists and favorites', onSignIn: widget.onSignIn),
       controller.isAuthenticated
-          ? _primaryPages[3]
+          ? AppShell._primaryPages[3]
           : _SignInRequiredScreen(
-              feature: 'listening rooms', onSignIn: onSignIn),
-      SettingsScreen(onSignOut: onSignOut, onSignIn: onSignIn),
+              feature: 'listening rooms', onSignIn: widget.onSignIn),
+      SettingsScreen(onSignOut: widget.onSignOut, onSignIn: widget.onSignIn),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 840;
-        final pageNavigatorKey = GlobalObjectKey<NavigatorState>(
-            'primary-page-${controller.activeTab}');
+        final pageNavigatorKey = _pageNavigatorKeys[controller.activeTab];
         final pageContent = Stack(children: [
           Column(children: [
             Expanded(
@@ -69,11 +76,13 @@ class AppShell extends StatelessWidget {
                 ),
               ),
             ),
-            if (controller.current != null && controller.activeTab != 4)
+            if (controller.current != null &&
+                controller.activeTab != 4 &&
+                !controller.nowPlayingScreenVisible)
               _MiniPlayer(
                 onOpen: () => pageNavigatorKey.currentState?.push<void>(
                   MaterialPageRoute(
-                    builder: (_) => const NowPlayingScreen(),
+                    builder: (_) => const _NowPlayingRoute(),
                   ),
                 ),
               ),
@@ -140,11 +149,11 @@ class AppShell extends StatelessWidget {
                               icon: const Icon(Icons.add_rounded)),
                         ),
                         destinations: List.generate(
-                            _labels.length,
+                            AppShell._labels.length,
                             (index) => NavigationRailDestination(
-                                icon: Icon(_icons[index]),
-                                selectedIcon: Icon(_icons[index]),
-                                label: Text(_labels[index]))),
+                                icon: Icon(AppShell._icons[index]),
+                                selectedIcon: Icon(AppShell._icons[index]),
+                                label: Text(AppShell._labels[index]))),
                       ),
                       const VerticalDivider(width: 1),
                       Expanded(child: content),
@@ -158,16 +167,48 @@ class AppShell extends StatelessWidget {
                   selectedIndex: controller.activeTab,
                   onDestinationSelected: controller.setTab,
                   destinations: List.generate(
-                      _labels.length,
+                      AppShell._labels.length,
                       (index) => NavigationDestination(
-                          icon: Icon(_icons[index]),
-                          selectedIcon: Icon(_icons[index]),
-                          label: _labels[index])),
+                          icon: Icon(AppShell._icons[index]),
+                          selectedIcon: Icon(AppShell._icons[index]),
+                          label: AppShell._labels[index])),
                 ),
         );
       },
     );
   }
+}
+
+class _NowPlayingRoute extends StatefulWidget {
+  const _NowPlayingRoute();
+
+  @override
+  State<_NowPlayingRoute> createState() => _NowPlayingRouteState();
+}
+
+class _NowPlayingRouteState extends State<_NowPlayingRoute> {
+  late MusicController _controller;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _controller = context.read<MusicController>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _controller.setNowPlayingScreenVisible(true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _controller.setNowPlayingScreenVisible(false));
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const NowPlayingScreen();
 }
 
 class _SignInRequiredScreen extends StatelessWidget {

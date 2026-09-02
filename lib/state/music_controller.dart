@@ -112,6 +112,7 @@ class MusicController extends ChangeNotifier {
   String? playerError;
   bool shuffleEnabled = false;
   bool repeatEnabled = false;
+  bool nowPlayingScreenVisible = false;
   int themeColorValue = 0xffe15184;
   bool useLightTheme = false;
   RoomConnectionStatus roomConnectionStatus = RoomConnectionStatus.disconnected;
@@ -287,6 +288,12 @@ class MusicController extends ChangeNotifier {
 
   void setTab(int tab) {
     activeTab = tab;
+    notifyListeners();
+  }
+
+  void setNowPlayingScreenVisible(bool visible) {
+    if (nowPlayingScreenVisible == visible) return;
+    nowPlayingScreenVisible = visible;
     notifyListeners();
   }
 

@@ -133,6 +133,15 @@ public class CatalogService {
 
   public List<TrackResponse> search(String query) {
     var clean = query == null ? "" : query.trim();
+    var mode = "all";
+    var separator = clean.indexOf(':');
+    if (separator > 0) {
+      var requestedMode = clean.substring(0, separator).toLowerCase(java.util.Locale.ROOT);
+      if (List.of("title", "album", "artist", "lyrics").contains(requestedMode)) {
+        mode = requestedMode;
+        clean = clean.substring(separator + 1).trim();
+      }
+    }
     if (clean.isBlank()) {
       return tracks.findAll().stream().limit(40).map(TrackResponse::from).toList();
     }
@@ -142,17 +151,81 @@ public class CatalogService {
     if (terms.isEmpty()) {
       return List.of();
     }
+    final var searchMode = mode;
+    final var searchQuery = clean;
+    final var lyricsByTrack = lyrics.findAll().stream()
+        .collect(Collectors.toMap(value -> value.trackId(), Function.identity(), (left, right) -> left));
     return tracks.findAll().stream()
         .filter(track -> {
-          var metadata = searchableMetadata(track);
-          return terms.stream().anyMatch(metadata::contains);
+          var haystack = switch (searchMode) {
+            case "title" -> normalizeSearchText(track.title());
+            case "album" -> normalizeSearchText(track.album());
+            case "artist" -> normalizeSearchText(String.join(" ",
+                cleanOrDefault(track.artist(), ""), cleanOrDefault(track.singers(), ""),
+                cleanOrDefault(track.musicDirector(), "")));
+            case "lyrics" -> searchableLyrics(lyricsByTrack.get(track.id()));
+            default -> searchableMetadata(track) + " " + searchableLyrics(lyricsByTrack.get(track.id()));
+          };
+          return terms.stream().anyMatch(haystack::contains);
         })
         .sorted(Comparator
-            .comparingInt((TrackDocument track) -> searchRank(track, clean, terms))
+            .comparingInt((TrackDocument track) -> searchRank(track, searchQuery, terms))
             .thenComparing(TrackDocument::title, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
         .limit(40)
         .map(TrackResponse::from)
         .toList();
+  }
+
+  private String searchableLyrics(com.telugutunes.api.domain.LyricsDocument value) {
+    if (value == null) return "";
+    var original = String.join(" ", cleanOrDefault(value.plainLyrics(), ""),
+        cleanOrDefault(value.syncedLyrics(), ""));
+    var english = String.join(" ", cleanOrDefault(value.englishPlainLyrics(), ""),
+        cleanOrDefault(value.englishSyncedLyrics(), ""));
+    return normalizeSearchText(original + " " + english + " " + romanizeTelugu(original));
+  }
+
+  private static String romanizeTelugu(String value) {
+    if (value == null || value.isBlank()) return "";
+    var consonants = Map.ofEntries(
+        Map.entry('క', "k"), Map.entry('ఖ', "kh"), Map.entry('గ', "g"), Map.entry('ఘ', "gh"),
+        Map.entry('చ', "ch"), Map.entry('ఛ', "chh"), Map.entry('జ', "j"), Map.entry('ఝ', "jh"),
+        Map.entry('ట', "t"), Map.entry('ఠ', "th"), Map.entry('డ', "d"), Map.entry('ఢ', "dh"),
+        Map.entry('త', "t"), Map.entry('థ', "th"), Map.entry('ద', "d"), Map.entry('ధ', "dh"),
+        Map.entry('న', "n"), Map.entry('ప', "p"), Map.entry('ఫ', "ph"), Map.entry('బ', "b"),
+        Map.entry('భ', "bh"), Map.entry('మ', "m"), Map.entry('య', "y"), Map.entry('ర', "r"),
+        Map.entry('ల', "l"), Map.entry('వ', "v"), Map.entry('శ', "sh"), Map.entry('ష', "sh"),
+        Map.entry('స', "s"), Map.entry('హ', "h"), Map.entry('ళ', "l"), Map.entry('ఱ', "r"));
+    var signs = Map.ofEntries(
+        Map.entry('ా', "aa"), Map.entry('ి', "i"), Map.entry('ీ', "ee"), Map.entry('ు', "u"),
+        Map.entry('ూ', "oo"), Map.entry('ృ', "ru"), Map.entry('ె', "e"), Map.entry('ే', "e"),
+        Map.entry('ై', "ai"), Map.entry('ొ', "o"), Map.entry('ో', "o"), Map.entry('ౌ', "au"));
+    var independent = Map.ofEntries(
+        Map.entry('అ', "a"), Map.entry('ఆ', "aa"), Map.entry('ఇ', "i"), Map.entry('ఈ', "ee"),
+        Map.entry('ఉ', "u"), Map.entry('ఊ', "oo"), Map.entry('ఎ', "e"), Map.entry('ఏ', "e"),
+        Map.entry('ఐ', "ai"), Map.entry('ఒ', "o"), Map.entry('ఓ', "o"), Map.entry('ఔ', "au"));
+    var result = new StringBuilder();
+    for (var index = 0; index < value.length(); index++) {
+      var current = value.charAt(index);
+      var consonant = consonants.get(current);
+      if (consonant != null) {
+        result.append(consonant);
+        if (index + 1 < value.length() && signs.containsKey(value.charAt(index + 1))) {
+          result.append(signs.get(value.charAt(++index)));
+        } else if (index + 1 < value.length() && value.charAt(index + 1) == '్') {
+          index++;
+        } else {
+          result.append('a');
+        }
+      } else if (independent.containsKey(current)) {
+        result.append(independent.get(current));
+      } else if (current == 'ం') {
+        result.append('m');
+      } else {
+        result.append(current);
+      }
+    }
+    return result.toString();
   }
 
   private String searchableMetadata(TrackDocument track) {

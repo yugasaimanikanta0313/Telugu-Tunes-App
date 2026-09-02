@@ -242,6 +242,7 @@ class _RecommendedPlaylistsScreenState
     final name = TextEditingController(text: existing?.name ?? '');
     final description =
         TextEditingController(text: existing?.description ?? '');
+    final artwork = TextEditingController(text: existing?.artworkUrl ?? '');
     const customChoice = 'Custom…';
     final initialType =
         existing?.type ?? recommendedPlaylistSubtypes.keys.first;
@@ -305,6 +306,59 @@ class _RecommendedPlaylistsScreenState
                                 controller: description,
                                 decoration: const InputDecoration(
                                     labelText: 'Details')),
+                            const SizedBox(height: 10),
+                            Artwork(
+                              color: existing?.color ?? '7C4DFF',
+                              label: name.text.trim().isEmpty
+                                  ? 'Recommendation'
+                                  : name.text.trim(),
+                              imageUrl: artwork.text.trim(),
+                              size: 132,
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: artwork,
+                              keyboardType: TextInputType.url,
+                              onChanged: (_) => setDialogState(() {}),
+                              decoration: const InputDecoration(
+                                labelText: 'Playlist / subtype cover URL',
+                                helperText:
+                                    'This cover is saved for this recommended subtype.',
+                                prefixIcon: Icon(Icons.image_outlined),
+                              ),
+                            ),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: OutlinedButton.icon(
+                                onPressed: () async {
+                                  final query = [
+                                    name.text,
+                                    subtypeChoice == customChoice
+                                        ? customSubtype.text
+                                        : subtypeChoice,
+                                  ]
+                                      .where((value) => value.trim().isNotEmpty)
+                                      .join(' ');
+                                  final result =
+                                      await music.suggestMetadata(query);
+                                  if (!dialogContext.mounted ||
+                                      result.artworkCandidates.isEmpty) {
+                                    return;
+                                  }
+                                  final selectedCover = await showArtworkPicker(
+                                    dialogContext,
+                                    result.artworkCandidates,
+                                  );
+                                  if (selectedCover != null &&
+                                      dialogContext.mounted) {
+                                    artwork.text = selectedCover.imageUrl;
+                                    setDialogState(() {});
+                                  }
+                                },
+                                icon: const Icon(Icons.image_search_rounded),
+                                label: const Text('Find cover'),
+                              ),
+                            ),
                             DropdownButtonFormField<String>(
                                 initialValue: typeChoice,
                                 decoration:
@@ -604,7 +658,7 @@ class _RecommendedPlaylistsScreenState
                                   type: type,
                                   subtype: subtype,
                                   color: existing?.color ?? '7C4DFF',
-                                  artworkUrl: existing?.artworkUrl ?? '',
+                                  artworkUrl: artwork.text.trim(),
                                   tracks: music.allTracks
                                       .where((t) => selected.contains(t.id))
                                       .toList(),
@@ -621,6 +675,7 @@ class _RecommendedPlaylistsScreenState
                 )));
     name.dispose();
     description.dispose();
+    artwork.dispose();
     customType.dispose();
     customSubtype.dispose();
     if (saved == true) await _load();

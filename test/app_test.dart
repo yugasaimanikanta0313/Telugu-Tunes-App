@@ -105,6 +105,13 @@ void main() {
     await pumpUi(tester);
     expect(find.byTooltip('Next'), findsOneWidget);
 
+    await tester.tap(find.text(controller.current!.title).last);
+    await pumpUi(tester);
+    expect(find.text('NOW PLAYING'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    Navigator.of(tester.element(find.text('NOW PLAYING'))).pop();
+    await pumpUi(tester);
+
     Navigator.of(tester.element(find.byType(HomeScreen))).push<void>(
       MaterialPageRoute(builder: (_) => const Scaffold(body: Text('Details'))),
     );

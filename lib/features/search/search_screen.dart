@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../domain/models/music_models.dart';
 import '../../state/music_controller.dart';
 import '../shared/widgets.dart';
 
@@ -14,6 +15,7 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _input = TextEditingController();
+  _SearchFilter _filter = _SearchFilter.all;
 
   @override
   void dispose() {
@@ -22,7 +24,14 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _search(String query) {
-    context.read<MusicController>().search(query);
+    final prefix = switch (_filter) {
+      _SearchFilter.songs => 'title:',
+      _SearchFilter.albums => 'album:',
+      _SearchFilter.artists => 'artist:',
+      _SearchFilter.lyrics => 'lyrics:',
+      _ => '',
+    };
+    context.read<MusicController>().search('$prefix$query');
     setState(() {});
   }
 
@@ -30,6 +39,27 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget build(BuildContext context) {
     final controller = context.watch<MusicController>();
     final hasQuery = _input.text.trim().isNotEmpty;
+    final playlistResults = <_PlaylistSearchResult>[
+      ...controller.playlists.map((playlist) => _PlaylistSearchResult(
+          playlist.name,
+          playlist.description,
+          playlist.artworkUrl,
+          playlist.color,
+          playlist.tracks)),
+      ...controller.recommendedPlaylists.map((playlist) =>
+          _PlaylistSearchResult(
+              '${playlist.name} • ${playlist.subtype}',
+              playlist.description,
+              playlist.artworkUrl,
+              playlist.color,
+              playlist.tracks)),
+    ].where((playlist) {
+      final query = _input.text.trim().toLowerCase();
+      return query.isNotEmpty &&
+          '${playlist.title} ${playlist.subtitle}'
+              .toLowerCase()
+              .contains(query);
+    }).toList();
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -60,55 +90,30 @@ class _SearchScreenState extends State<SearchScreen> {
                       : null,
                 ),
               ),
+              const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _SearchFilter.values.map((filter) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        selected: _filter == filter,
+                        label: Text(filter.label),
+                        avatar: Icon(filter.icon, size: 18),
+                        onSelected: (_) {
+                          setState(() => _filter = filter);
+                          _search(_input.text);
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
             ]),
           ),
         ),
         if (!hasQuery) ...[
-          const SliverToBoxAdapter(
-              child: SectionTitle(title: 'Start with a feeling')),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _MoodChip(
-                      label: 'Calm',
-                      icon: Icons.nightlight_round,
-                      color: '7C4DFF',
-                      onTap: () {
-                        _input.text = 'vennela';
-                        _search(_input.text);
-                      }),
-                  _MoodChip(
-                      label: 'Road trip',
-                      icon: Icons.directions_car_filled_rounded,
-                      color: 'FF7043',
-                      onTap: () {
-                        _input.text = 'prayanam';
-                        _search(_input.text);
-                      }),
-                  _MoodChip(
-                      label: 'Rainy day',
-                      icon: Icons.cloud_rounded,
-                      color: '00A896',
-                      onTap: () {
-                        _input.text = 'mabbullo';
-                        _search(_input.text);
-                      }),
-                  _MoodChip(
-                      label: 'Movie night',
-                      icon: Icons.local_movies_rounded,
-                      color: 'EC407A',
-                      onTap: () {
-                        _input.text = 'godari';
-                        _search(_input.text);
-                      }),
-                ],
-              ),
-            ),
-          ),
           const SliverToBoxAdapter(
               child: SectionTitle(title: 'Browse your collection')),
           SliverGrid(
@@ -140,6 +145,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             if (canLoadArtwork(album.artworkUrl))
                               CachedNetworkImage(
                                 imageUrl: album.artworkUrl,
+                                errorListener: (_) {},
                                 fit: BoxFit.cover,
                               ),
                             DecoratedBox(
@@ -202,7 +208,39 @@ class _SearchScreenState extends State<SearchScreen> {
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2, childAspectRatio: 1.55),
           ),
-        ] else if (controller.searchResults.isEmpty) ...[
+        ] else if (_filter == _SearchFilter.playlists &&
+            playlistResults.isNotEmpty) ...[
+          SliverToBoxAdapter(
+              child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Text('${playlistResults.length} playlists',
+                style: Theme.of(context).textTheme.labelLarge),
+          )),
+          SliverList.builder(
+            itemCount: playlistResults.length,
+            itemBuilder: (context, index) {
+              final playlist = playlistResults[index];
+              return ListTile(
+                leading: Artwork(
+                  color: playlist.color,
+                  label: playlist.title,
+                  imageUrl: playlist.artworkUrl,
+                  size: 52,
+                  icon: Icons.queue_music_rounded,
+                ),
+                title: Text(playlist.title),
+                subtitle: Text(
+                    '${playlist.subtitle} • ${playlist.tracks.length} songs'),
+                trailing: const Icon(Icons.play_arrow_rounded),
+                onTap: playlist.tracks.isEmpty
+                    ? null
+                    : () => controller.play(playlist.tracks.first),
+              );
+            },
+          ),
+        ] else if ((_filter == _SearchFilter.playlists &&
+                playlistResults.isEmpty) ||
+            controller.searchResults.isEmpty) ...[
           const SliverFillRemaining(
             hasScrollBody: false,
             child: EmptyState(
@@ -235,24 +273,35 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 }
 
-class _MoodChip extends StatelessWidget {
-  const _MoodChip(
-      {required this.label,
-      required this.icon,
-      required this.color,
-      required this.onTap});
+enum _SearchFilter { all, songs, albums, artists, playlists, lyrics }
 
-  final String label;
-  final IconData icon;
+extension on _SearchFilter {
+  String get label => switch (this) {
+        _SearchFilter.all => 'All',
+        _SearchFilter.songs => 'Songs',
+        _SearchFilter.albums => 'Albums',
+        _SearchFilter.artists => 'Artists',
+        _SearchFilter.playlists => 'Playlists',
+        _SearchFilter.lyrics => 'Lyrics',
+      };
+
+  IconData get icon => switch (this) {
+        _SearchFilter.all => Icons.tune_rounded,
+        _SearchFilter.songs => Icons.music_note_rounded,
+        _SearchFilter.albums => Icons.album_rounded,
+        _SearchFilter.artists => Icons.mic_rounded,
+        _SearchFilter.playlists => Icons.queue_music_rounded,
+        _SearchFilter.lyrics => Icons.lyrics_rounded,
+      };
+}
+
+class _PlaylistSearchResult {
+  const _PlaylistSearchResult(
+      this.title, this.subtitle, this.artworkUrl, this.color, this.tracks);
+
+  final String title;
+  final String subtitle;
+  final String artworkUrl;
   final String color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => ActionChip(
-        avatar: Icon(icon, size: 18, color: colorFromHex(color)),
-        label: Text(label),
-        onPressed: onTap,
-        side: BorderSide.none,
-        backgroundColor: colorFromHex(color).withOpacity(.15),
-      );
+  final List<Track> tracks;
 }
