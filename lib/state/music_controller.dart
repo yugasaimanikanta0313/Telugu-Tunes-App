@@ -57,7 +57,11 @@ class MusicController extends ChangeNotifier {
       _audio.trackChangedStream.listen(_audioTrackChanged),
       _audio.completedStream.listen((_) {
         _offerTrackVote(current);
-        unawaited(_playNextRoomTrack());
+        if (room == null) {
+          unawaited(_playNextCatalogTrack());
+        } else {
+          unawaited(_playNextRoomTrack());
+        }
       }),
     ];
   }
@@ -325,7 +329,7 @@ class MusicController extends ChangeNotifier {
     try {
       await _audio.play(
         track,
-        queue: room == null ? allTracks : [track],
+        queue: [track],
       );
       _publishRealtimeRoomPlayback();
       unawaited(_publishRoomPlayback());
@@ -392,6 +396,14 @@ class MusicController extends ChangeNotifier {
     } catch (_) {
       // The host can retry playback manually if advancing the shared queue is interrupted.
     }
+  }
+
+  Future<void> _playNextCatalogTrack() async {
+    final finished = current;
+    if (finished == null || allTracks.isEmpty) return;
+    final index = allTracks.indexWhere((track) => track.id == finished.id);
+    final nextIndex = index < 0 ? 0 : (index + 1) % allTracks.length;
+    await play(allTracks[nextIndex]);
   }
 
   Future<void> skipPrevious() async {
