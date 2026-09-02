@@ -54,28 +54,37 @@ class AppShell extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 840;
-        final content = Stack(children: [
+        final pageNavigatorKey = GlobalObjectKey<NavigatorState>(
+            'primary-page-${controller.activeTab}');
+        final pageContent = Stack(children: [
           Column(children: [
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
-                child: KeyedSubtree(
-                    key: ValueKey(controller.activeTab),
-                    child: pages[controller.activeTab]),
+                child: Navigator(
+                  key: pageNavigatorKey,
+                  onGenerateRoute: (_) => MaterialPageRoute<void>(
+                    builder: (_) => pages[controller.activeTab],
+                  ),
+                ),
               ),
             ),
-            if (controller.current != null)
+            if (controller.current != null && controller.activeTab != 4)
               _MiniPlayer(
-                  onOpen: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const NowPlayingScreen()))),
+                onOpen: () => pageNavigatorKey.currentState?.push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => const NowPlayingScreen(),
+                  ),
+                ),
+              ),
           ]),
           if (controller.votePromptTrack case final track?)
             Positioned(
               left: 16,
               right: 16,
-              bottom: controller.current == null ? 16 : 82,
+              bottom: controller.current == null || controller.activeTab == 4
+                  ? 16
+                  : 82,
               child: Center(
                   child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 620),
@@ -104,6 +113,13 @@ class AppShell extends StatelessWidget {
               )),
             ),
         ]);
+        final content = SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: pageContent,
+          ),
+        );
         return Scaffold(
           body: MusicalAurora(
             child: wide

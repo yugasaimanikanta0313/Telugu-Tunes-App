@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:telugu_tunes/data/repositories/music_repository.dart';
+import 'package:telugu_tunes/features/home/home_screen.dart';
 import 'package:telugu_tunes/features/shell/app_shell.dart';
 import 'package:telugu_tunes/main.dart';
 import 'package:telugu_tunes/state/music_controller.dart';
@@ -25,9 +26,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    expect(find.text('Namasthe!, Srinu'), findsOneWidget);
-    expect(find.text('Recently played'), findsOneWidget);
-    expect(find.text('Tune AI'), findsOneWidget);
+    expect(find.text('Namasthe Srinu'), findsOneWidget);
+    expect(find.text('Search songs, singers, albums…'), findsOneWidget);
+    expect(find.text('Recently added albums'), findsOneWidget);
+    await tester.tap(find.text('See all').first);
+    await pumpUi(tester);
+    expect(find.text('All albums'), findsOneWidget);
   });
 
   testWidgets('closing a room returns to the lobby without a framework error',
@@ -76,10 +80,40 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    expect(find.text('Recently played'), findsOneWidget);
+    expect(find.text('Recently added albums'), findsOneWidget);
     tester.element(find.byType(AppShell)).read<MusicController>().setTab(3);
     await pumpUi(tester);
 
     expect(find.text('Sign in for listening rooms'), findsOneWidget);
+  });
+
+  testWidgets('mini player persists on pushed pages except settings',
+      (tester) async {
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => MusicController(MockMusicRepository())..load(),
+        child: const MaterialApp(home: AppShell()),
+      ),
+    );
+    for (var index = 0; index < 10; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    final controller =
+        tester.element(find.byType(AppShell)).read<MusicController>();
+    await controller.play(controller.allTracks.first);
+    await pumpUi(tester);
+    expect(find.byTooltip('Next'), findsOneWidget);
+
+    Navigator.of(tester.element(find.byType(HomeScreen))).push<void>(
+      MaterialPageRoute(builder: (_) => const Scaffold(body: Text('Details'))),
+    );
+    await pumpUi(tester);
+    expect(find.text('Details'), findsOneWidget);
+    expect(find.byTooltip('Next'), findsOneWidget);
+
+    controller.setTab(4);
+    await pumpUi(tester);
+    expect(find.byTooltip('Next'), findsNothing);
   });
 }
