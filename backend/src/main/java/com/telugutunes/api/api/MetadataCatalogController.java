@@ -5,6 +5,8 @@ import com.telugutunes.api.config.AuthenticationFilter;
 import com.telugutunes.api.domain.MetadataCatalogEntry;
 import com.telugutunes.api.service.MetadataCatalogService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
@@ -29,5 +31,16 @@ public class MetadataCatalogController {
   @GetMapping("/match")
   public ResponseEntity<MetadataCatalogEntry> match(@RequestParam String fileName) {
     return catalog.match(fileName).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.noContent().build());
+  }
+
+  @GetMapping("/export")
+  public ResponseEntity<byte[]> export(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String administratorId) {
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=telugu-tunes-song-catalog.xlsx")
+        .contentType(MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .body(catalog.exportCurrentSongs(administratorId));
   }
 }

@@ -1046,6 +1046,8 @@ class MusicController extends ChangeNotifier {
 
   Future<Uint8List> exportBackup() => _repository.exportBackup();
 
+  Future<Uint8List> exportSongCatalog() => _repository.exportSongCatalog();
+
   Future<void> restoreBackup(Uint8List bytes) async {
     await _repository.restoreBackup(bytes);
     await load(announce: true);

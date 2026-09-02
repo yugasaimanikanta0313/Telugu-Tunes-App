@@ -90,10 +90,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ListTile(
                 leading: const Icon(Icons.how_to_vote_outlined),
                 title: const Text('Review community votes'),
-                subtitle: const Text('Approve songs suggested for recommended playlists'),
+                subtitle: const Text(
+                    'Approve songs suggested for recommended playlists'),
                 trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => const RecommendationVotesScreen())),
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const RecommendationVotesScreen())),
               ),
               const Divider(height: 1),
               ListTile(
@@ -106,15 +109,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const Divider(height: 1),
               ListTile(
+                leading: const Icon(Icons.table_view_rounded),
+                title: const Text('Save current song catalog'),
+                subtitle: const Text(
+                    'Download all current song details as an Excel file'),
+                trailing: const Icon(Icons.download_rounded),
+                onTap: () => _exportSongCatalog(controller),
+              ),
+              const Divider(height: 1),
+              ListTile(
                 leading: const Icon(Icons.restore_rounded),
                 title: const Text('Restore metadata backup'),
                 subtitle: const Text('Safely merges a Telugu Tunes JSON file'),
                 trailing: const Icon(Icons.upload_file_rounded),
                 onTap: () => _restoreBackup(controller),
               ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.table_view_rounded),
+                title: const Text('Upload metadata catalog'),
+                subtitle: const Text(
+                    'Merge an Excel catalog and store the latest copy in Oracle'),
+                trailing: const Icon(Icons.cloud_upload_rounded),
+                onTap: () => _uploadMetadataCatalog(controller),
+              ),
             ]),
           ),
         ],
+        const SectionTitle(title: 'Appearance'),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('App theme',
+                    style: TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                const Text('Choose the look used across every page.'),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(
+                        value: false,
+                        icon: Icon(Icons.dark_mode_rounded),
+                        label: Text('Dark'),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        icon: Icon(Icons.light_mode_rounded),
+                        label: Text('Light'),
+                      ),
+                    ],
+                    selected: {controller.useLightTheme},
+                    onSelectionChanged: (selection) =>
+                        controller.setLightTheme(selection.first),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         const SectionTitle(title: 'Playback & downloads'),
         Card(
           child: Column(children: [
@@ -267,6 +324,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _exportSongCatalog(MusicController controller) async {
+    try {
+      final bytes = await controller.exportSongCatalog();
+      await FilePicker.saveFile(
+        dialogTitle: 'Save current Telugu Tunes song catalog',
+        fileName: 'telugu-tunes-song-catalog.xlsx',
+        type: FileType.custom,
+        allowedExtensions: const ['xlsx'],
+        bytes: bytes,
+      );
+      if (mounted) _showMessage('Current song catalog saved as Excel.');
+    } catch (error) {
+      if (mounted) _showMessage(_cleanError(error), error: true);
+    }
+  }
+
   Future<void> _restoreBackup(MusicController controller) async {
     final picked = await FilePicker.pickFiles(
       type: FileType.custom,
@@ -302,6 +375,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await controller.restoreBackup(bytes);
       if (mounted) _showMessage('Backup restored and catalog refreshed.');
+    } catch (error) {
+      if (mounted) _showMessage(_cleanError(error), error: true);
+    }
+  }
+
+  Future<void> _uploadMetadataCatalog(MusicController controller) async {
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['xlsx'],
+      withData: true,
+    );
+    if (picked == null || !mounted) return;
+    final file = picked.files.single;
+    if (file.bytes == null) {
+      _showMessage('Could not read the selected Excel file.', error: true);
+      return;
+    }
+    try {
+      final result =
+          await controller.uploadMetadataCatalog(file.name, file.bytes!);
+      if (!mounted) return;
+      _showMessage(
+        '${result.message} ${result.imported} new, ${result.updated} updated, ${result.total} total rows.',
+      );
     } catch (error) {
       if (mounted) _showMessage(_cleanError(error), error: true);
     }

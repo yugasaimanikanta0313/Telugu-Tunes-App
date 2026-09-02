@@ -67,6 +67,7 @@ abstract class MusicApiService {
     bool? isAdmin,
   });
   Future<Uint8List> exportBackup();
+  Future<Uint8List> exportSongCatalog();
   Future<void> restoreBackup(Uint8List bytes);
   Future<MetadataCatalogImportResult> uploadMetadataCatalog(
       String fileName, Uint8List bytes);
@@ -540,6 +541,18 @@ class SpringBootMusicApiService implements MusicApiService {
   Future<Uint8List> exportBackup() async {
     final response = await _client.get(
       Uri.parse(config.baseUrl + '/admin/backup'),
+      headers: _headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(_errorMessage(response));
+    }
+    return response.bodyBytes;
+  }
+
+  @override
+  Future<Uint8List> exportSongCatalog() async {
+    final response = await _client.get(
+      Uri.parse(config.baseUrl + '/admin/metadata-catalog/export'),
       headers: _headers,
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {

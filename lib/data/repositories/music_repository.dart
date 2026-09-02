@@ -53,6 +53,7 @@ abstract class MusicRepository {
     bool? isAdmin,
   });
   Future<Uint8List> exportBackup();
+  Future<Uint8List> exportSongCatalog();
   Future<void> restoreBackup(Uint8List bytes);
   Future<MetadataCatalogImportResult> uploadMetadataCatalog(
       String fileName, Uint8List bytes);
@@ -208,6 +209,8 @@ class SpringBootMusicRepository implements MusicRepository {
       _api.updateAdminMember(memberId, active: active, isAdmin: isAdmin);
   @override
   Future<Uint8List> exportBackup() => _api.exportBackup();
+  @override
+  Future<Uint8List> exportSongCatalog() => _api.exportSongCatalog();
   @override
   Future<void> restoreBackup(Uint8List bytes) => _api.restoreBackup(bytes);
   @override
@@ -628,6 +631,9 @@ class MockMusicRepository implements MusicRepository {
   Future<Uint8List> exportBackup() async => Uint8List.fromList(utf8.encode(
         '{"schemaVersion":1,"tracks":[],"albums":[],"playlists":[],"lyrics":[]}',
       ));
+
+  @override
+  Future<Uint8List> exportSongCatalog() async => Uint8List(0);
 
   @override
   Future<void> restoreBackup(Uint8List bytes) async {}

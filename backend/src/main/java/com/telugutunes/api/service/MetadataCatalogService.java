@@ -4,6 +4,7 @@ import com.telugutunes.api.api.dto.MetadataCatalogImportResponse;
 import com.telugutunes.api.config.AppProperties;
 import com.telugutunes.api.domain.MetadataCatalogEntry;
 import com.telugutunes.api.repository.MetadataCatalogRepository;
+import com.telugutunes.api.repository.TrackRepository;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.text.Normalizer;
@@ -31,18 +32,41 @@ public class MetadataCatalogService {
   public static final String OBJECT_KEY = "metadata/catalog/music_metadata_catalog.xlsx";
   private static final List<String> HEADERS = List.of(
       "song name", "primary artist", "album", "singers", "music director", "genre");
+  private static final String ARTWORK_HEADER = "artwork url";
 
   private final MetadataCatalogRepository repository;
+  private final TrackRepository tracks;
   private final AuthService auth;
   private final ObjectProvider<S3Client> s3Provider;
   private final AppProperties properties;
 
-  public MetadataCatalogService(MetadataCatalogRepository repository, AuthService auth,
+  public MetadataCatalogService(MetadataCatalogRepository repository, TrackRepository tracks, AuthService auth,
       ObjectProvider<S3Client> s3Provider, AppProperties properties) {
     this.repository = repository;
+    this.tracks = tracks;
     this.auth = auth;
     this.s3Provider = s3Provider;
     this.properties = properties;
+  }
+
+  public byte[] exportCurrentSongs(String administratorId) {
+    auth.requireAdministrator(administratorId);
+    var entries = tracks.findAll().stream()
+        .sorted(java.util.Comparator
+            .comparing(com.telugutunes.api.domain.TrackDocument::album,
+                java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+            .thenComparing(com.telugutunes.api.domain.TrackDocument::title,
+                java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+        .map(track -> new MetadataCatalogEntry(
+            track.id(), clean(track.title()), clean(track.artist()), clean(track.album()),
+            clean(track.singers()), clean(track.musicDirector()), clean(track.genre()),
+            clean(track.artworkUrl()), normalizeSong(track.title()), track.createdAt()))
+        .toList();
+    try {
+      return exportWorkbook(entries);
+    } catch (Exception exception) {
+      throw new IllegalStateException("Could not export the current song catalog.", exception);
+    }
   }
 
   public MetadataCatalogImportResponse upload(String administratorId, MultipartFile file) {
@@ -67,11 +91,12 @@ public class MetadataCatalogService {
         String album = value(row, columns.get("album"), formatter);
         String singers = value(row, columns.get("singers"), formatter);
         String director = value(row, columns.get("music director"), formatter);
+        String artwork = optionalValue(row, artworkColumn(columns), formatter);
         String id = stableKey(song, album, singers, director);
         boolean exists = repository.existsById(id);
         repository.save(new MetadataCatalogEntry(id, song,
             value(row, columns.get("primary artist"), formatter), album, singers, director,
-            value(row, columns.get("genre"), formatter), normalizeSong(song), Instant.now()));
+            value(row, columns.get("genre"), formatter), artwork, normalizeSong(song), Instant.now()));
         if (exists) updated++; else imported++;
       }
       byte[] canonical = exportWorkbook(repository.findAll());
@@ -143,16 +168,33 @@ public class MetadataCatalogService {
     return cell == null ? "" : formatter.formatCellValue(cell).trim();
   }
 
+  private static Integer artworkColumn(Map<String, Integer> columns) {
+    for (String name : List.of(ARTWORK_HEADER, "cover pic", "cover url", "thumbnail url")) {
+      if (columns.containsKey(name)) return columns.get(name);
+    }
+    return null;
+  }
+
+  private static String optionalValue(Row row, Integer column, DataFormatter formatter) {
+    return column == null ? "" : value(row, column, formatter);
+  }
+
   private static String stableKey(String... values) {
     return java.util.UUID.nameUUIDFromBytes(String.join("|", values).toLowerCase(Locale.ROOT)
         .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+  }
+
+  private static String clean(String value) {
+    return value == null ? "" : value.trim();
   }
 
   private byte[] exportWorkbook(List<MetadataCatalogEntry> entries) throws Exception {
     try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
       Sheet sheet = workbook.createSheet("Music Metadata Catalog");
       Row header = sheet.createRow(0);
-      for (int i = 0; i < HEADERS.size(); i++) header.createCell(i).setCellValue(titleCase(HEADERS.get(i)));
+      var exportedHeaders = new java.util.ArrayList<>(HEADERS);
+      exportedHeaders.add(ARTWORK_HEADER);
+      for (int i = 0; i < exportedHeaders.size(); i++) header.createCell(i).setCellValue(titleCase(exportedHeaders.get(i)));
       int rowIndex = 1;
       for (MetadataCatalogEntry entry : entries) {
         Row row = sheet.createRow(rowIndex++);
@@ -162,9 +204,10 @@ public class MetadataCatalogService {
         row.createCell(3).setCellValue(entry.singers());
         row.createCell(4).setCellValue(entry.musicDirector());
         row.createCell(5).setCellValue(entry.genre());
+        row.createCell(6).setCellValue(entry.artworkUrl() == null ? "" : entry.artworkUrl());
       }
       sheet.createFreezePane(0, 1);
-      for (int i = 0; i < HEADERS.size(); i++) sheet.autoSizeColumn(i);
+      for (int i = 0; i < exportedHeaders.size(); i++) sheet.autoSizeColumn(i);
       workbook.write(output);
       return output.toByteArray();
     }
