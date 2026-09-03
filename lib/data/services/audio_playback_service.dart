@@ -36,9 +36,7 @@ class AudioPlaybackService {
       _player.durationStream.listen((value) => _duration.add(value)),
       _player.playerStateStream.listen((value) => _playing.add(value.playing)),
       _player.currentIndexStream.listen(_currentIndexChanged),
-      _player.playerStateStream
-          .where((value) => value.processingState == ProcessingState.completed)
-          .listen((_) => _completed.add(null)),
+      _player.playerStateStream.listen(_playerStateChanged),
       _player.errorStream.listen((error) {
         final message = error.toString();
         if (message.contains('PIPELINE_ERROR_READ') ||
@@ -67,10 +65,11 @@ class AudioPlaybackService {
   final _duration = StreamController<Duration?>.broadcast();
   final _playing = StreamController<bool>.broadcast();
   final _errors = StreamController<String>.broadcast();
-  final _completed = StreamController<void>.broadcast();
+  final _completed = StreamController<String>.broadcast();
   final _trackChanged = StreamController<String>.broadcast();
   late final List<StreamSubscription<dynamic>> _subscriptions;
   String? _loadedTrackId;
+  String? _reportedCompletionTrackId;
   List<Track> _queueTracks = const [];
   List<String> _queueIds = const [];
   Timer? _speedResetTimer;
@@ -84,7 +83,7 @@ class AudioPlaybackService {
   Stream<Duration?> get durationStream => _duration.stream;
   Stream<bool> get playingStream => _playing.stream;
   Stream<String> get errorStream => _errors.stream;
-  Stream<void> get completedStream => _completed.stream;
+  Stream<String> get completedStream => _completed.stream;
   Stream<String> get trackChangedStream => _trackChanged.stream;
   Duration get position => _player.position;
   bool get isPlaying => _player.playing;
@@ -101,6 +100,9 @@ class AudioPlaybackService {
       if (!_sameQueue(requestedIds)) {
         await _loadQueue(requestedQueue, initialIndex: index);
       } else if (_player.currentIndex != index) {
+        await _player.seek(Duration.zero, index: index);
+      } else if (_reportedCompletionTrackId == track.id) {
+        _reportedCompletionTrackId = null;
         await _player.seek(Duration.zero, index: index);
       }
       await _setSpeed(1);
@@ -225,6 +227,15 @@ class AudioPlaybackService {
       initialIndex: initialIndex.clamp(0, tracks.length - 1),
     );
     _loadedTrackId = tracks[initialIndex].id;
+    _reportedCompletionTrackId = null;
+  }
+
+  void _playerStateChanged(PlayerState state) {
+    if (state.processingState != ProcessingState.completed) return;
+    final trackId = _loadedTrackId;
+    if (trackId == null || _reportedCompletionTrackId == trackId) return;
+    _reportedCompletionTrackId = trackId;
+    _completed.add(trackId);
   }
 
   Future<AudioSource> _sourceForTrack(Track track) async {
