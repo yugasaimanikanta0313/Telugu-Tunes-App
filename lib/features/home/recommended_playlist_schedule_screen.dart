@@ -210,9 +210,10 @@ class _SubtypeScheduleCard extends StatelessWidget {
               : IconButton(
                   tooltip: 'Play this subtype',
                   icon: const Icon(Icons.play_circle_fill_rounded),
-                  onPressed: () => context
-                      .read<MusicController>()
-                      .play(playlist.tracks.first),
+                  onPressed: () => context.read<MusicController>().play(
+                      playlist.tracks.first,
+                      sequence: playlist.tracks,
+                      loopSequence: true),
                 ),
           children: playlist.tracks.isEmpty
               ? const [
@@ -224,8 +225,8 @@ class _SubtypeScheduleCard extends StatelessWidget {
               : playlist.tracks
                   .map((track) => TrackTile(
                         track: track,
-                        onTap: () =>
-                            context.read<MusicController>().play(track),
+                        onTap: () => context.read<MusicController>().play(track,
+                            sequence: playlist.tracks, loopSequence: true),
                         onMore: () => showTrackActions(context, track),
                       ))
                   .toList(),

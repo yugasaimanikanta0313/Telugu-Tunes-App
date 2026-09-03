@@ -498,7 +498,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ...playlist.tracks.map((track) => TrackTile(
                 track: track,
                 onTap: () {
-                  context.read<MusicController>().play(track);
+                  context.read<MusicController>().play(track,
+                      sequence: playlist.tracks, loopSequence: true);
                   Navigator.pop(sheetContext);
                 },
                 onMore: () => showTrackActions(context, track),

@@ -96,9 +96,9 @@ class AlbumDetailScreen extends StatelessWidget {
                         child: FilledButton.icon(
                           onPressed: album.tracks.isEmpty
                               ? null
-                              : () => context
-                                  .read<MusicController>()
-                                  .play(album.tracks.first),
+                              : () => context.read<MusicController>().play(
+                                  album.tracks.first,
+                                  sequence: album.tracks),
                           icon: const Icon(Icons.play_arrow_rounded),
                           label: const Text('Play'),
                         ),
@@ -134,7 +134,9 @@ class AlbumDetailScreen extends StatelessWidget {
               return TrackTile(
                   track: track,
                   index: index + 1,
-                  onTap: () => context.read<MusicController>().play(track),
+                  onTap: () => context
+                      .read<MusicController>()
+                      .play(track, sequence: album.tracks),
                   onMore: () => showTrackActions(context, track));
             },
           ),

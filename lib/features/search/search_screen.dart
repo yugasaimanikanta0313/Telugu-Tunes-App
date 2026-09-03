@@ -234,7 +234,8 @@ class _SearchScreenState extends State<SearchScreen> {
                 trailing: const Icon(Icons.play_arrow_rounded),
                 onTap: playlist.tracks.isEmpty
                     ? null
-                    : () => controller.play(playlist.tracks.first),
+                    : () => controller.play(playlist.tracks.first,
+                        sequence: playlist.tracks, loopSequence: true),
               );
             },
           ),

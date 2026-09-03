@@ -56,7 +56,6 @@ class MusicController extends ChangeNotifier {
       }),
       _audio.trackChangedStream.listen(_audioTrackChanged),
       _audio.completedStream.listen((_) {
-        _offerTrackVote(current);
         if (room == null) {
           unawaited(_playNextCatalogTrack());
         } else {
@@ -88,7 +87,8 @@ class MusicController extends ChangeNotifier {
   ListeningRoom? _pendingRoomSync;
   Future<void>? _roomSyncWorker;
   Timer? _sleepTimer;
-  Timer? _votePromptTimer;
+  List<Track> _playbackSequence = const [];
+  bool _loopPlaybackSequence = false;
   HomeData? _home;
   List<Album> _albums = [];
   List<Playlist> _playlists = [];
@@ -122,7 +122,6 @@ class MusicController extends ChangeNotifier {
   RoomConnectionStatus roomConnectionStatus = RoomConnectionStatus.disconnected;
   int roomDriftMs = 0;
   TrackLyrics? currentLyrics;
-  Track? votePromptTrack;
   bool lyricsLoading = false;
   String? lyricsError;
   DateTime? sleepEndsAt;
@@ -306,7 +305,22 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> play(Track track) async {
+  Future<void> play(
+    Track track, {
+    List<Track>? sequence,
+    bool loopSequence = false,
+  }) async {
+    if (sequence != null) {
+      _playbackSequence = _uniqueTracks(sequence);
+      _loopPlaybackSequence = loopSequence;
+    } else {
+      _playbackSequence = const [];
+      _loopPlaybackSequence = false;
+    }
+    await _playTrack(track);
+  }
+
+  Future<void> _playTrack(Track track) async {
     _sleepStoppedPlayback = false;
     final activeRoom = room;
     if (activeRoom != null && activeRoom.host != memberId) {
@@ -357,7 +371,7 @@ class MusicController extends ChangeNotifier {
     }
     try {
       if (!playing && _position == Duration.zero) {
-        await play(current!);
+        await _playTrack(current!);
       } else {
         await _audio.toggle();
         _publishRealtimeRoomPlayback();
@@ -371,7 +385,10 @@ class MusicController extends ChangeNotifier {
 
   Future<void> skipNext() async {
     if (allTracks.isEmpty) return;
-    if (room == null && _audio.isAvailable && await _audio.skipNext()) return;
+    if (room == null) {
+      await _playNextCatalogTrack();
+      return;
+    }
     final index = allTracks.indexWhere((track) => track.id == current?.id);
     await play(allTracks[(index + 1) % allTracks.length]);
   }
@@ -401,9 +418,28 @@ class MusicController extends ChangeNotifier {
   Future<void> _playNextCatalogTrack() async {
     final finished = current;
     if (finished == null || allTracks.isEmpty) return;
+    final sequenceIndex =
+        _playbackSequence.indexWhere((track) => track.id == finished.id);
+    if (sequenceIndex >= 0) {
+      if (sequenceIndex + 1 < _playbackSequence.length) {
+        await _playTrack(_playbackSequence[sequenceIndex + 1]);
+        return;
+      }
+      if (_loopPlaybackSequence && _playbackSequence.isNotEmpty) {
+        await _playTrack(_playbackSequence.first);
+        return;
+      }
+      _playbackSequence = const [];
+      _loopPlaybackSequence = false;
+    }
     final index = allTracks.indexWhere((track) => track.id == finished.id);
     final nextIndex = index < 0 ? 0 : (index + 1) % allTracks.length;
-    await play(allTracks[nextIndex]);
+    await _playTrack(allTracks[nextIndex]);
+  }
+
+  List<Track> _uniqueTracks(List<Track> tracks) {
+    final seen = <String>{};
+    return tracks.where((track) => seen.add(track.id)).toList(growable: false);
   }
 
   Future<void> skipPrevious() async {
@@ -493,12 +529,6 @@ class MusicController extends ChangeNotifier {
 
   void _audioTrackChanged(String trackId) {
     if (room != null) return;
-    final finishedTrack = current;
-    final finishedDuration = _duration;
-    final naturallyCompleted = finishedTrack != null &&
-        finishedDuration != null &&
-        finishedDuration.inMilliseconds > 0 &&
-        _position >= finishedDuration - const Duration(seconds: 2);
     Track? track;
     for (final item in allTracks) {
       if (item.id == trackId) {
@@ -507,7 +537,6 @@ class MusicController extends ChangeNotifier {
       }
     }
     if (track == null || current?.id == track.id) return;
-    if (naturallyCompleted) _offerTrackVote(finishedTrack);
     current = track;
     _position = Duration.zero;
     playerError = null;
@@ -1161,7 +1190,6 @@ class MusicController extends ChangeNotifier {
       Track track, RecommendedPlaylist playlist, String reason) async {
     if (!isAuthenticated) throw StateError('Sign in to vote for playlists.');
     await _repository.voteForRecommendation(track.id, playlist.id, reason);
-    dismissVotePrompt();
   }
 
   Future<List<RecommendationVoteSuggestion>> getRecommendationVotes() =>
@@ -1174,28 +1202,9 @@ class MusicController extends ChangeNotifier {
     if (approve) await load();
   }
 
-  void _offerTrackVote(Track? track) {
-    if (!isAuthenticated ||
-        room != null ||
-        track == null ||
-        eligibleVotePlaylists(track).isEmpty) return;
-    votePromptTrack = track;
-    _votePromptTimer?.cancel();
-    _votePromptTimer = Timer(const Duration(seconds: 5), dismissVotePrompt);
-    notifyListeners();
-  }
-
-  void dismissVotePrompt() {
-    _votePromptTimer?.cancel();
-    if (votePromptTrack == null) return;
-    votePromptTrack = null;
-    notifyListeners();
-  }
-
   @override
   void dispose() {
     _sleepTimer?.cancel();
-    _votePromptTimer?.cancel();
     _roomPolling?.cancel();
     _roomPlaybackPublisher?.cancel();
     _roomRealtimePublisher?.cancel();

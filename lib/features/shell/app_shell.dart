@@ -87,40 +87,6 @@ class _AppShellState extends State<AppShell> {
                 ),
               ),
           ]),
-          if (controller.votePromptTrack case final track?)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: controller.current == null || controller.activeTab == 4
-                  ? 16
-                  : 82,
-              child: Center(
-                  child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 620),
-                child: Card(
-                    elevation: 12,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-                      child: Row(children: [
-                        const Icon(Icons.how_to_vote_outlined),
-                        const SizedBox(width: 12),
-                        Expanded(
-                            child: Text(
-                                'Should “${track.title}” be added to a recommended playlist?')),
-                        TextButton(
-                            onPressed: () {
-                              controller.dismissVotePrompt();
-                              showRecommendationVoteSheet(context, track);
-                            },
-                            child: const Text('Go to voting')),
-                        IconButton(
-                            onPressed: controller.dismissVotePrompt,
-                            tooltip: 'Not now',
-                            icon: const Icon(Icons.close_rounded)),
-                      ]),
-                    )),
-              )),
-            ),
         ]);
         final content = SafeArea(
           bottom: false,
