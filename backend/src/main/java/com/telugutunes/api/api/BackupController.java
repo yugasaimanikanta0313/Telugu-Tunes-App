@@ -1,5 +1,6 @@
 package com.telugutunes.api.api;
 
+import com.telugutunes.api.api.dto.BackupPreviewResponse;
 import com.telugutunes.api.api.dto.BackupSnapshot;
 import com.telugutunes.api.config.AuthenticationFilter;
 import com.telugutunes.api.service.BackupService;
@@ -34,5 +35,12 @@ public class BackupController {
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String administratorId,
       @RequestBody BackupSnapshot snapshot) {
     return backups.restore(administratorId, snapshot);
+  }
+
+  @PostMapping("/preview")
+  public BackupPreviewResponse preview(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String administratorId,
+      @RequestBody BackupSnapshot snapshot) {
+    return backups.preview(administratorId, snapshot);
   }
 }

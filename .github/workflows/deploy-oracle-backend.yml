@@ -96,6 +96,8 @@ jobs:
             exit 1
           }
 
+          sudo install -d -m 750 -o 10001 -g 10001 /opt/telugu-tunes/backups
+
           docker pull "$IMAGE"
           docker rm -f telugu-tunes-api 2>/dev/null || true
           docker run -d \
@@ -104,6 +106,7 @@ jobs:
             --env-file /opt/telugu-tunes/backend.env \
             --memory 700m \
             --memory-swap 1400m \
+            -v /opt/telugu-tunes/backups:/app/backups \
             -p 8080:8080 \
             "$IMAGE"
 

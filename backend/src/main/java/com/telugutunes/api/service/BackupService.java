@@ -1,5 +1,6 @@
 package com.telugutunes.api.service;
 
+import com.telugutunes.api.api.dto.BackupPreviewResponse;
 import com.telugutunes.api.api.dto.BackupSnapshot;
 import com.telugutunes.api.repository.AlbumRepository;
 import com.telugutunes.api.repository.LyricsRepository;
@@ -36,22 +37,43 @@ public class BackupService {
 
   public BackupSnapshot exportSnapshot(String administratorId) {
     auth.requireAdministrator(administratorId);
+    return exportSystemSnapshot();
+  }
+
+  public BackupSnapshot exportSystemSnapshot() {
     return new BackupSnapshot(
         1, Instant.now(), tracks.findAll(), albums.findAll(), playlists.findAll(),
         recommendedPlaylists.findAll(), lyrics.findAll());
   }
 
+  public BackupPreviewResponse preview(String administratorId, BackupSnapshot snapshot) {
+    auth.requireAdministrator(administratorId);
+    validate(snapshot);
+    return new BackupPreviewResponse(
+        snapshot.schemaVersion(), snapshot.exportedAt(), size(snapshot.tracks()),
+        size(snapshot.albums()), size(snapshot.playlists()),
+        size(snapshot.recommendedPlaylists()), size(snapshot.lyrics()), true);
+  }
+
   /** Merge restore is intentionally non-destructive: records absent from a backup remain untouched. */
   public BackupSnapshot restore(String administratorId, BackupSnapshot snapshot) {
     auth.requireAdministrator(administratorId);
-    if (snapshot == null || snapshot.schemaVersion() != 1) {
-      throw new IllegalArgumentException("Unsupported or missing backup schema.");
-    }
+    validate(snapshot);
     tracks.saveAll(snapshot.tracks() == null ? List.of() : snapshot.tracks());
     albums.saveAll(snapshot.albums() == null ? List.of() : snapshot.albums());
     playlists.saveAll(snapshot.playlists() == null ? List.of() : snapshot.playlists());
     recommendedPlaylists.saveAll(snapshot.recommendedPlaylists() == null ? List.of() : snapshot.recommendedPlaylists());
     lyrics.saveAll(snapshot.lyrics() == null ? List.of() : snapshot.lyrics());
     return exportSnapshot(administratorId);
+  }
+
+  private void validate(BackupSnapshot snapshot) {
+    if (snapshot == null || snapshot.schemaVersion() != 1) {
+      throw new IllegalArgumentException("Unsupported or missing backup schema.");
+    }
+  }
+
+  private int size(java.util.Collection<?> values) {
+    return values == null ? 0 : values.size();
   }
 }

@@ -75,12 +75,12 @@ public class CatalogService {
         "charts", "Telugu Tunes charts", "Popular picks from your private catalog", "E15184", "playlist", charts));
     collections.add(new CollectionResponse(
         "latest", "Recently added", "New music from your circle", "7C4DFF", "mix", latest));
-    addMood(collections, "mood-chill", "Chill Telugu", "Soft songs for a quiet mood", "4F86C6",
-        allTracks, List.of("chill", "melody", "slow", "acoustic", "calm", "lofi"));
-    addMood(collections, "mood-love", "Romantic mood", "Telugu love songs selected automatically", "E15184",
-        allTracks, List.of("love", "romantic", "prema", "melody"));
-    addMood(collections, "mood-energy", "High energy", "Fast songs for drives and workouts", "F59E0B",
-        allTracks, List.of("dance", "mass", "rock", "party", "energetic", "folk"));
+    addMood(collections, "mood-chill", "Chill Telugu", "Songs explicitly tagged chill or calm", "4F86C6",
+        allTracks, "chill");
+    addMood(collections, "mood-love", "Romantic mood", "Songs explicitly tagged romantic or love", "E15184",
+        allTracks, "romantic");
+    addMood(collections, "mood-energy", "High energy", "Songs explicitly tagged energetic", "F59E0B",
+        allTracks, "energy");
     if (!allTracks.isEmpty()) {
       var automatic = new ArrayList<>(allTracks);
       Collections.rotate(automatic, LocalDate.now().getDayOfYear() % automatic.size());
@@ -115,20 +115,36 @@ public class CatalogService {
       String subtitle,
       String color,
       List<TrackDocument> allTracks,
-      List<String> keywords) {
+      String requestedMood) {
     var selected = allTracks.stream()
-        .filter(track -> {
-          var searchable = String.join(" ",
-              cleanOrDefault(track.genre(), ""), cleanOrDefault(track.title(), ""),
-              cleanOrDefault(track.album(), "")).toLowerCase(java.util.Locale.ROOT);
-          return keywords.stream().anyMatch(searchable::contains);
-        })
+        .filter(track -> requestedMood.equals(classifyMood(track.genre())))
         .limit(15)
         .map(TrackResponse::from)
         .toList();
     if (!selected.isEmpty()) {
       collections.add(new CollectionResponse(id, title, subtitle, color, "mix", selected));
     }
+  }
+
+  private String classifyMood(String genre) {
+    var value = normalizeSearchText(cleanOrDefault(genre, ""));
+    if (containsAny(value, List.of("dance", "mass", "rock", "party", "energetic", "high energy"))) {
+      return "energy";
+    }
+    if (containsAny(value, List.of("love", "romantic", "romance", "prema"))) {
+      return "romantic";
+    }
+    if (containsAny(value, List.of("chill", "slow", "acoustic", "calm", "lofi", "ambient"))) {
+      return "chill";
+    }
+    return "";
+  }
+
+  private boolean containsAny(String value, List<String> tags) {
+    return tags.stream().anyMatch(tag -> java.util.regex.Pattern
+        .compile("(^|\\s)" + java.util.regex.Pattern.quote(tag) + "($|\\s)")
+        .matcher(value)
+        .find());
   }
 
   public List<TrackResponse> search(String query) {

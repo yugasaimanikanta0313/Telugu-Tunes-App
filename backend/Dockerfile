@@ -10,7 +10,7 @@ RUN mvn -B -DskipTests package
 FROM eclipse-temurin:21-jre
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --system --uid 10001 appuser

@@ -23,18 +23,21 @@ public class ImportService {
   private final TrackRepository tracks;
   private final AlbumRepository albums;
   private final AuthService auth;
+  private final AudioFingerprintService fingerprints;
 
   public ImportService(
       ImportJobRepository jobs,
       ResilientStorageService storage,
       TrackRepository tracks,
       AlbumRepository albums,
-      AuthService auth) {
+      AuthService auth,
+      AudioFingerprintService fingerprints) {
     this.jobs = jobs;
     this.storage = storage;
     this.tracks = tracks;
     this.albums = albums;
     this.auth = auth;
+    this.fingerprints = fingerprints;
   }
 
   public ImportResponse importAudio(
@@ -57,6 +60,8 @@ public class ImportService {
     if (file.getSize() > 50L * 1024 * 1024) {
       throw new IllegalArgumentException("The current upload limit is 50 MB.");
     }
+    var fingerprint = fingerprints.analyze(file);
+    fingerprints.rejectDuplicate(fingerprint);
     var cleanTitle = cleanOrDefault(title, titleFromFileName(file.getOriginalFilename()));
     var cleanSingers = cleanOrEmpty(singers);
     var cleanAlbum = cleanOrDefault(album, "Imported music");
@@ -79,7 +84,7 @@ public class ImportService {
               "Private audio storage is not configured yet. The import request has been saved."));
     }
     var media = storage.upload(file, allowLargeFile);
-    saveImportedTrack(
+    var savedTrack = saveImportedTrack(
         memberId,
         media,
         title,
@@ -91,6 +96,7 @@ public class ImportService {
         genre,
         artworkUrl,
         sourceUrl);
+    fingerprints.save(savedTrack.id(), fingerprint);
     var job =
         save(
             memberId,
@@ -104,7 +110,7 @@ public class ImportService {
     return ImportResponse.from(job, media);
   }
 
-  private void saveImportedTrack(
+  private TrackDocument saveImportedTrack(
       String memberId,
       MediaStorageService.StoredMedia media,
       String title,
@@ -169,6 +175,7 @@ public class ImportService {
             albumRecord.movie(),
             trackIds,
             albumRecord.createdAt()));
+    return track;
   }
 
   private String titleFromFileName(String fileName) {

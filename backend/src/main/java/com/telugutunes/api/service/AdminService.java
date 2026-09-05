@@ -14,17 +14,29 @@ import org.springframework.stereotype.Service;
 public class AdminService {
   private final AuthService auth;
   private final MemberRepository members;
+  private final MemberActivityService activity;
 
-  public AdminService(AuthService auth, MemberRepository members) {
+  public AdminService(
+      AuthService auth, MemberRepository members, MemberActivityService activity) {
     this.auth = auth;
     this.members = members;
+    this.activity = activity;
   }
 
   public java.util.List<AdminMemberResponse> members(String administratorId) {
     auth.requireAdministrator(administratorId);
+    var now = java.time.Instant.now();
+    var activityByMember = activity.allByMemberId();
     return members.findAll().stream()
         .sorted(java.util.Comparator.comparing(Member::displayName, String.CASE_INSENSITIVE_ORDER))
-        .map(AdminMemberResponse::from)
+        .map(member -> {
+          var value = activityByMember.get(member.id());
+          return AdminMemberResponse.from(
+              member,
+              activity.online(value, now),
+              value == null ? null : value.lastSeenAt(),
+              value == null ? 0 : value.listeningSeconds());
+        })
         .toList();
   }
 
@@ -55,6 +67,11 @@ public class AdminService {
                 Set.copyOf(roles),
                 request.active() == null ? target.active() : request.active(),
                 target.createdAt()));
-    return AdminMemberResponse.from(updated);
+    var value = activity.allByMemberId().get(updated.id());
+    return AdminMemberResponse.from(
+        updated,
+        activity.online(value, java.time.Instant.now()),
+        value == null ? null : value.lastSeenAt(),
+        value == null ? 0 : value.listeningSeconds());
   }
 }
