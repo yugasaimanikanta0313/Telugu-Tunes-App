@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../domain/models/music_models.dart';
 import '../../state/music_controller.dart';
+import 'user_statistics_screen.dart';
 
 class MemberManagementScreen extends StatefulWidget {
   const MemberManagementScreen({super.key});
@@ -87,6 +88,13 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                         for (final member in _members)
                           Card(
                             child: ListTile(
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      UserStatisticsScreen(member: member),
+                                ),
+                              ),
                               leading: CircleAvatar(
                                 backgroundColor: member.online
                                     ? Colors.green.withValues(alpha: .2)
@@ -116,26 +124,43 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                                 '${member.email}\n${member.isOwner ? 'Owner' : member.isAdmin ? 'Administrator' : 'Member'} • ${member.active ? 'Account enabled' : 'Account disabled'}\n${member.online ? 'Online now' : _lastSeen(member.lastSeenAt)} • Listened ${_listeningTime(member.listeningSeconds)}',
                               ),
                               isThreeLine: true,
-                              trailing: PopupMenuButton<_MemberAction>(
-                                onSelected: (action) => switch (action) {
-                                  _MemberAction.toggleAdmin =>
-                                    _update(member, isAdmin: !member.isAdmin),
-                                  _MemberAction.toggleActive =>
-                                    _update(member, active: !member.active),
-                                },
-                                itemBuilder: (context) => [
-                                  if (!member.isOwner)
-                                    PopupMenuItem(
-                                      value: _MemberAction.toggleAdmin,
-                                      child: Text(member.isAdmin
-                                          ? 'Remove administrator access'
-                                          : 'Make administrator'),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Listening statistics',
+                                    icon: const Icon(Icons.insights_rounded),
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => UserStatisticsScreen(
+                                            member: member),
+                                      ),
                                     ),
-                                  PopupMenuItem(
-                                    value: _MemberAction.toggleActive,
-                                    child: Text(member.active
-                                        ? 'Disable account'
-                                        : 'Enable account'),
+                                  ),
+                                  PopupMenuButton<_MemberAction>(
+                                    onSelected: (action) => switch (action) {
+                                      _MemberAction.toggleAdmin => _update(
+                                          member,
+                                          isAdmin: !member.isAdmin),
+                                      _MemberAction.toggleActive =>
+                                        _update(member, active: !member.active),
+                                    },
+                                    itemBuilder: (context) => [
+                                      if (!member.isOwner)
+                                        PopupMenuItem(
+                                          value: _MemberAction.toggleAdmin,
+                                          child: Text(member.isAdmin
+                                              ? 'Remove administrator access'
+                                              : 'Make administrator'),
+                                        ),
+                                      PopupMenuItem(
+                                        value: _MemberAction.toggleActive,
+                                        child: Text(member.active
+                                            ? 'Disable account'
+                                            : 'Enable account'),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),

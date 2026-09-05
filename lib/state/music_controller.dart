@@ -320,11 +320,20 @@ class MusicController extends ChangeNotifier {
         playing: _appActive && playing,
         trackId: current?.id ?? '',
         listenedSeconds: listenedSeconds,
+        title: current?.title ?? '',
+        artist: current?.artist ?? '',
+        album: current?.album ?? '',
+        genre: current?.genre ?? '',
+        source: _playbackSourceLabel,
       );
     } catch (_) {
       // Presence and statistics must never interrupt playback.
     }
   }
+
+  Future<MemberListeningStatistics> getMemberStatistics(String memberId,
+          {int days = 30}) =>
+      _repository.getMemberStatistics(memberId, days: days);
 
   void setNowPlayingScreenVisible(bool visible) {
     if (nowPlayingScreenVisible == visible) return;

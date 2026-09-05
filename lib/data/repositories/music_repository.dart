@@ -52,11 +52,18 @@ abstract class MusicRepository {
     bool? active,
     bool? isAdmin,
   });
+  Future<MemberListeningStatistics> getMemberStatistics(String memberId,
+      {int days = 30});
   Future<void> sendActivityHeartbeat({
     required bool appActive,
     required bool playing,
     required String trackId,
     required int listenedSeconds,
+    required String title,
+    required String artist,
+    required String album,
+    required String genre,
+    required String source,
   });
   Future<Uint8List> exportBackup();
   Future<Uint8List> exportSongCatalog();
@@ -220,13 +227,27 @@ class SpringBootMusicRepository implements MusicRepository {
     required bool playing,
     required String trackId,
     required int listenedSeconds,
+    required String title,
+    required String artist,
+    required String album,
+    required String genre,
+    required String source,
   }) =>
       _api.sendActivityHeartbeat(
         appActive: appActive,
         playing: playing,
         trackId: trackId,
         listenedSeconds: listenedSeconds,
+        title: title,
+        artist: artist,
+        album: album,
+        genre: genre,
+        source: source,
       );
+  @override
+  Future<MemberListeningStatistics> getMemberStatistics(String memberId,
+          {int days = 30}) =>
+      _api.getMemberStatistics(memberId, days: days);
   @override
   Future<Uint8List> exportBackup() => _api.exportBackup();
   @override
@@ -656,7 +677,24 @@ class MockMusicRepository implements MusicRepository {
     required bool playing,
     required String trackId,
     required int listenedSeconds,
+    required String title,
+    required String artist,
+    required String album,
+    required String genre,
+    required String source,
   }) async {}
+
+  @override
+  Future<MemberListeningStatistics> getMemberStatistics(String memberId,
+          {int days = 30}) async =>
+      MemberListeningStatistics(
+          memberId: memberId,
+          days: days,
+          totalSeconds: 0,
+          daily: const [],
+          categories: const {},
+          sources: const {},
+          playbackOrder: const []);
 
   @override
   Future<Uint8List> exportBackup() async => Uint8List.fromList(utf8.encode(

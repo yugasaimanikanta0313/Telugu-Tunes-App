@@ -66,11 +66,18 @@ abstract class MusicApiService {
     bool? active,
     bool? isAdmin,
   });
+  Future<MemberListeningStatistics> getMemberStatistics(String memberId,
+      {int days = 30});
   Future<void> sendActivityHeartbeat({
     required bool appActive,
     required bool playing,
     required String trackId,
     required int listenedSeconds,
+    required String title,
+    required String artist,
+    required String album,
+    required String genre,
+    required String source,
   });
   Future<Uint8List> exportBackup();
   Future<Uint8List> exportSongCatalog();
@@ -550,13 +557,29 @@ class SpringBootMusicApiService implements MusicApiService {
     required bool playing,
     required String trackId,
     required int listenedSeconds,
+    required String title,
+    required String artist,
+    required String album,
+    required String genre,
+    required String source,
   }) =>
       _postEmpty('/activity/heartbeat', {
         'appActive': appActive,
         'playing': playing,
         'trackId': trackId,
         'listenedSeconds': listenedSeconds,
+        'title': title,
+        'artist': artist,
+        'album': album,
+        'genre': genre,
+        'source': source,
       });
+
+  @override
+  Future<MemberListeningStatistics> getMemberStatistics(String memberId,
+          {int days = 30}) async =>
+      _memberStatistics(
+          await _getMap('/admin/members/$memberId/statistics?days=$days'));
 
   @override
   Future<Uint8List> exportBackup() async {
@@ -1094,6 +1117,38 @@ class SpringBootMusicApiService implements MusicApiService {
         online: json['online'] as bool? ?? false,
         lastSeenAt: DateTime.tryParse(json['lastSeenAt'] as String? ?? ''),
         listeningSeconds: (json['listeningSeconds'] as num?)?.toInt() ?? 0,
+      );
+
+  MemberListeningStatistics _memberStatistics(Map<String, dynamic> json) =>
+      MemberListeningStatistics(
+        memberId: json['memberId'] as String? ?? '',
+        days: (json['days'] as num?)?.toInt() ?? 30,
+        totalSeconds: (json['totalSeconds'] as num?)?.toInt() ?? 0,
+        daily: (json['daily'] as List? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map((item) => DailyListeningPoint(
+                date: DateTime.tryParse(item['date'] as String? ?? '') ??
+                    DateTime.now(),
+                seconds: (item['seconds'] as num?)?.toInt() ?? 0))
+            .toList(),
+        categories: (json['categories'] as Map? ?? const {}).map((key, value) =>
+            MapEntry(key.toString(), (value as num?)?.toInt() ?? 0)),
+        sources: (json['sources'] as Map? ?? const {}).map((key, value) =>
+            MapEntry(key.toString(), (value as num?)?.toInt() ?? 0)),
+        playbackOrder: (json['playbackOrder'] as List? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map((item) => PlaybackHistoryEntry(
+                  trackId: item['trackId'] as String? ?? '',
+                  title: item['title'] as String? ?? 'Unknown song',
+                  artist: item['artist'] as String? ?? 'Unknown artist',
+                  album: item['album'] as String? ?? 'Unknown album',
+                  genre: item['genre'] as String? ?? 'Uncategorised',
+                  source: item['source'] as String? ?? 'Catalog / search',
+                  startedAt:
+                      DateTime.tryParse(item['startedAt'] as String? ?? '') ??
+                          DateTime.now(),
+                ))
+            .toList(),
       );
 
   ListeningRoom _room(Map<String, dynamic> room) => ListeningRoom(

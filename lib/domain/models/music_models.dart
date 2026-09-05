@@ -46,6 +46,50 @@ class AdminMember {
   final int listeningSeconds;
 }
 
+class DailyListeningPoint {
+  const DailyListeningPoint({required this.date, required this.seconds});
+  final DateTime date;
+  final int seconds;
+}
+
+class PlaybackHistoryEntry {
+  const PlaybackHistoryEntry({
+    required this.trackId,
+    required this.title,
+    required this.artist,
+    required this.album,
+    required this.genre,
+    required this.source,
+    required this.startedAt,
+  });
+  final String trackId;
+  final String title;
+  final String artist;
+  final String album;
+  final String genre;
+  final String source;
+  final DateTime startedAt;
+}
+
+class MemberListeningStatistics {
+  const MemberListeningStatistics({
+    required this.memberId,
+    required this.days,
+    required this.totalSeconds,
+    required this.daily,
+    required this.categories,
+    required this.sources,
+    required this.playbackOrder,
+  });
+  final String memberId;
+  final int days;
+  final int totalSeconds;
+  final List<DailyListeningPoint> daily;
+  final Map<String, int> categories;
+  final Map<String, int> sources;
+  final List<PlaybackHistoryEntry> playbackOrder;
+}
+
 class Track {
   const Track({
     required this.id,

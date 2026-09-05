@@ -14,18 +14,23 @@ import org.springframework.stereotype.Service;
 public class MemberActivityService {
   private static final Duration ONLINE_WINDOW = Duration.ofSeconds(75);
   private final MemberActivityRepository activities;
+  private final ListeningStatisticsService statistics;
 
-  public MemberActivityService(MemberActivityRepository activities) {
+  public MemberActivityService(MemberActivityRepository activities, ListeningStatisticsService statistics) {
     this.activities = activities;
+    this.statistics = statistics;
   }
 
   public void heartbeat(String memberId, ActivityHeartbeatRequest request) {
     if (request == null) return;
     var previous = activities.findById(memberId).orElse(null);
     var listened = previous == null ? 0L : previous.listeningSeconds();
+    var increment = 0;
     if (Boolean.TRUE.equals(request.appActive()) && Boolean.TRUE.equals(request.playing())) {
-      listened += Math.max(0, Math.min(60, request.listenedSeconds() == null ? 0 : request.listenedSeconds()));
+      increment = Math.max(0, Math.min(60, request.listenedSeconds() == null ? 0 : request.listenedSeconds()));
+      listened += increment;
     }
+    statistics.record(memberId, request, increment);
     activities.save(new MemberActivityDocument(
         memberId,
         listened,
