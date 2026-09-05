@@ -81,7 +81,9 @@ class PlaylistDetailScreen extends StatelessWidget {
                                   : () {
                                       music.play(playlist.tracks.first,
                                           sequence: playlist.tracks,
-                                          loopSequence: true);
+                                          loopSequence: true,
+                                          sourceLabel:
+                                              'Personal playlist • ${playlist.name}');
                                     },
                               icon: const Icon(Icons.play_arrow_rounded),
                               label: const Text('Play playlist')),
@@ -105,7 +107,9 @@ class PlaylistDetailScreen extends StatelessWidget {
                     subtitle:
                         'Added by ${playlist.trackAddedByNames[track.id] ?? 'Playlist owner'} • ${track.artist} • ${track.album}',
                     onTap: () => music.play(track,
-                        sequence: playlist.tracks, loopSequence: true),
+                        sequence: playlist.tracks,
+                        loopSequence: true,
+                        sourceLabel: 'Personal playlist • ${playlist.name}'),
                     onMore: () => showTrackActions(context, track));
               }),
         const SliverToBoxAdapter(child: SizedBox(height: 30)),

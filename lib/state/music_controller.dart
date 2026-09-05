@@ -82,8 +82,12 @@ class MusicController extends ChangeNotifier {
   ListeningRoom? _pendingRoomSync;
   Future<void>? _roomSyncWorker;
   Timer? _sleepTimer;
+  Timer? _activityTimer;
+  bool _appActive = true;
   List<Track> _playbackSequence = const [];
   bool _loopPlaybackSequence = false;
+  bool _stopAtSequenceEnd = false;
+  String _playbackSourceLabel = 'Catalog';
   bool _advancingAfterCompletion = false;
   HomeData? _home;
   List<Album> _albums = [];
@@ -273,6 +277,7 @@ class MusicController extends ChangeNotifier {
     }
     _configureRoomPolling();
     _configurePublicRoomPolling();
+    _configureActivityHeartbeat();
     loading = false;
     notifyListeners();
   }
@@ -290,6 +295,37 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setAppActive(bool value) {
+    if (_appActive == value) return;
+    _appActive = value;
+    unawaited(_sendActivityHeartbeat(listenedSeconds: 0));
+  }
+
+  void _configureActivityHeartbeat() {
+    _activityTimer?.cancel();
+    if (!isAuthenticated) return;
+    unawaited(_sendActivityHeartbeat(listenedSeconds: 0));
+    _activityTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (_appActive) {
+        unawaited(_sendActivityHeartbeat(listenedSeconds: playing ? 20 : 0));
+      }
+    });
+  }
+
+  Future<void> _sendActivityHeartbeat({required int listenedSeconds}) async {
+    if (!isAuthenticated) return;
+    try {
+      await _repository.sendActivityHeartbeat(
+        appActive: _appActive,
+        playing: _appActive && playing,
+        trackId: current?.id ?? '',
+        listenedSeconds: listenedSeconds,
+      );
+    } catch (_) {
+      // Presence and statistics must never interrupt playback.
+    }
+  }
+
   void setNowPlayingScreenVisible(bool visible) {
     if (nowPlayingScreenVisible == visible) return;
     nowPlayingScreenVisible = visible;
@@ -305,13 +341,19 @@ class MusicController extends ChangeNotifier {
     Track track, {
     List<Track>? sequence,
     bool loopSequence = false,
+    bool stopAtSequenceEnd = false,
+    String sourceLabel = 'Catalog',
   }) async {
     if (sequence != null) {
       _playbackSequence = _uniqueTracks(sequence);
       _loopPlaybackSequence = loopSequence;
+      _stopAtSequenceEnd = stopAtSequenceEnd;
+      _playbackSourceLabel = sourceLabel;
     } else {
       _playbackSequence = const [];
       _loopPlaybackSequence = false;
+      _stopAtSequenceEnd = false;
+      _playbackSourceLabel = sourceLabel;
     }
     await _playTrack(track);
   }
@@ -449,6 +491,11 @@ class MusicController extends ChangeNotifier {
         return;
       }
       _playbackSequence = const [];
+      if (_stopAtSequenceEnd) {
+        playing = false;
+        notifyListeners();
+        return;
+      }
     }
     final index = allTracks.indexWhere((track) => track.id == finished.id);
     final nextIndex = index < 0 ? 0 : (index + 1) % allTracks.length;
@@ -1100,6 +1147,52 @@ class MusicController extends ChangeNotifier {
     await load(announce: true);
   }
 
+  List<Track> get playbackQueue => List.unmodifiable(_playbackSequence);
+  String get playbackSourceLabel => _playbackSourceLabel;
+
+  void reorderPlaybackQueue(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _playbackSequence.length) return;
+    final updated = [..._playbackSequence];
+    if (newIndex > oldIndex) newIndex--;
+    final item = updated.removeAt(oldIndex);
+    updated.insert(newIndex.clamp(0, updated.length), item);
+    _playbackSequence = updated;
+    notifyListeners();
+  }
+
+  void removeFromPlaybackQueue(Track track) {
+    if (track.id == current?.id) return;
+    _playbackSequence = _playbackSequence
+        .where((item) => item.id != track.id)
+        .toList(growable: false);
+    notifyListeners();
+  }
+
+  void playNextInQueue(Track track) {
+    final currentTrack = current;
+    if (currentTrack == null || track.id == currentTrack.id) return;
+    final updated = _playbackSequence.isEmpty
+        ? <Track>[currentTrack]
+        : [..._playbackSequence];
+    updated.removeWhere((item) => item.id == track.id);
+    final currentIndex =
+        updated.indexWhere((item) => item.id == currentTrack.id);
+    updated.insert(currentIndex < 0 ? 0 : currentIndex + 1, track);
+    _playbackSequence = updated;
+    notifyListeners();
+  }
+
+  void clearUpcomingQueue() {
+    final currentTrack = current;
+    _playbackSequence = currentTrack == null ? const [] : [currentTrack];
+    _loopPlaybackSequence = false;
+    _stopAtSequenceEnd = true;
+    notifyListeners();
+  }
+
+  Future<BackupPreview> previewBackup(Uint8List bytes) =>
+      _repository.previewBackup(bytes);
+
   Future<MetadataCatalogImportResult> uploadMetadataCatalog(
           String fileName, Uint8List bytes) =>
       _repository.uploadMetadataCatalog(fileName, bytes);
@@ -1222,7 +1315,12 @@ class MusicController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (isAuthenticated && _appActive) {
+      _appActive = false;
+      unawaited(_sendActivityHeartbeat(listenedSeconds: 0));
+    }
     _sleepTimer?.cancel();
+    _activityTimer?.cancel();
     _roomPolling?.cancel();
     _roomPlaybackPublisher?.cancel();
     _roomRealtimePublisher?.cancel();

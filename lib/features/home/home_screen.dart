@@ -25,10 +25,33 @@ class _DashboardRecommendedGroup {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final SearchController _searchController = SearchController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<MusicController>();
     final recommended = _allGroups(controller.recommendedPlaylists);
+    final albums = _recentAlbumsFirst(controller);
+    final normalizedQuery = _searchQuery.trim().toLowerCase();
+    final searchResults = normalizedQuery.isEmpty
+        ? const <Track>[]
+        : controller.allTracks.where((track) {
+            return [
+              track.title,
+              track.artist,
+              track.album,
+              track.singers,
+              track.musicDirector,
+              track.genre,
+            ].any((value) => value.toLowerCase().contains(normalizedQuery));
+          }).toList();
     if (controller.loading)
       return const Center(child: CircularProgressIndicator());
     return CustomScrollView(
@@ -43,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                       Text(
-                        'Namasthe!, ${controller.memberName}',
+                        'Namasthe ${controller.memberName}',
                         style: Theme.of(context)
                             .textTheme
                             .headlineSmall
@@ -62,6 +85,79 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: SearchBar(
+              controller: _searchController,
+              leading: const Icon(Icons.search_rounded),
+              hintText: 'Search songs, singers, albums…',
+              trailing: _searchQuery.isEmpty
+                  ? null
+                  : [
+                      IconButton(
+                        tooltip: 'Clear search',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+              onChanged: (value) => setState(() => _searchQuery = value),
+            ),
+          ),
+        ),
+        if (normalizedQuery.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: SectionTitle(
+              title: searchResults.isEmpty
+                  ? 'No songs found'
+                  : 'Songs matching “${_searchQuery.trim()}”',
+            ),
+          ),
+          if (searchResults.isNotEmpty)
+            SliverList.builder(
+              itemCount: searchResults.length,
+              itemBuilder: (context, index) {
+                final track = searchResults[index];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: TrackTile(
+                    track: track,
+                    onTap: () => controller.play(track),
+                    onMore: () => showTrackActions(context, track),
+                  ),
+                );
+              },
+            ),
+        ],
+        if (albums.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: SectionTitle(
+              title: 'Recently added albums',
+              action: 'See all',
+              onAction: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => _AllAlbumsScreen(albums: albums),
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 202,
+              child: ListView.builder(
+                padding: const EdgeInsets.only(left: 20),
+                scrollDirection: Axis.horizontal,
+                itemCount: albums.length,
+                itemBuilder: (context, index) =>
+                    _albumCard(context, albums[index]),
+              ),
+            ),
+          ),
+        ],
         if (recommended.isNotEmpty) ...[
           SliverToBoxAdapter(
             child: Padding(
@@ -274,34 +370,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-        const SliverToBoxAdapter(
-            child: SectionTitle(title: 'Albums & movie worlds')),
-        SliverToBoxAdapter(
-          child: SizedBox(
-            height: 202,
-            child: ListView.builder(
-              padding: const EdgeInsets.only(left: 20),
-              scrollDirection: Axis.horizontal,
-              itemCount: controller.albums.length,
-              itemBuilder: (context, index) {
-                final album = controller.albums[index];
-                return CollectionCard(
-                  title: album.title,
-                  subtitle: album.isMovie
-                      ? 'Movie • ' + album.year.toString()
-                      : album.artist,
-                  color: album.color,
-                  imageUrl: album.artworkUrl,
-                  movie: album.isMovie,
-                  onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => AlbumDetailScreen(album: album))),
-                );
-              },
-            ),
-          ),
-        ),
         if (controller.allTracks.isEmpty)
           SliverToBoxAdapter(
             child: EmptyState(
@@ -329,61 +397,18 @@ class _HomeScreenState extends State<HomeScreen> {
                               controller.play(collection.tracks.first))),
                   SliverToBoxAdapter(
                     child: SizedBox(
-                      height: 126,
+                      height: 154,
                       child: ListView.builder(
                         padding: const EdgeInsets.only(left: 20),
                         scrollDirection: Axis.horizontal,
                         itemCount: collection.tracks.length,
                         itemBuilder: (context, index) {
                           final track = collection.tracks[index];
-                          return SizedBox(
-                            width: 220,
-                            child: Card(
-                              margin: const EdgeInsets.only(right: 10),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () => controller.play(track),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(10),
-                                  child: Row(children: [
-                                    Artwork(
-                                        color: track.color,
-                                        label: track.album,
-                                        imageUrl: track.artworkUrl,
-                                        size: 58),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                        child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                          Text(track.title,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.w800)),
-                                          const SizedBox(height: 3),
-                                          Text(track.artist,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall),
-                                          if (controller
-                                              .isDownloaded(track)) ...[
-                                            const SizedBox(height: 6),
-                                            const Pill(
-                                                label: 'Offline',
-                                                icon:
-                                                    Icons.download_done_rounded)
-                                          ],
-                                        ])),
-                                  ]),
-                                ),
-                              ),
-                            ),
+                          return _modernCollectionTrackCard(
+                            context,
+                            controller,
+                            collection.title,
+                            track,
                           );
                         },
                       ),
@@ -394,6 +419,38 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
   }
+
+  List<Album> _recentAlbumsFirst(MusicController controller) {
+    final recentAlbumIds = <String, int>{};
+    for (final track in controller.recentlyPlayed) {
+      recentAlbumIds.putIfAbsent(track.albumId, () => recentAlbumIds.length);
+    }
+    final indexed = controller.albums.indexed.toList();
+    indexed.sort((left, right) {
+      final leftRecent = recentAlbumIds[left.$2.id];
+      final rightRecent = recentAlbumIds[right.$2.id];
+      if (leftRecent != null || rightRecent != null) {
+        if (leftRecent == null) return 1;
+        if (rightRecent == null) return -1;
+        return leftRecent.compareTo(rightRecent);
+      }
+      final byYear = right.$2.year.compareTo(left.$2.year);
+      return byYear != 0 ? byYear : left.$1.compareTo(right.$1);
+    });
+    return indexed.map((item) => item.$2).toList(growable: false);
+  }
+
+  Widget _albumCard(BuildContext context, Album album) => CollectionCard(
+        title: album.title,
+        subtitle: album.isMovie ? 'Movie • ${album.year}' : album.artist,
+        color: album.color,
+        imageUrl: album.artworkUrl,
+        movie: album.isMovie,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => AlbumDetailScreen(album: album)),
+        ),
+      );
 
   List<_DashboardRecommendedGroup> _allGroups(
       List<RecommendedPlaylist> source) {
@@ -477,6 +534,101 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _modernCollectionTrackCard(
+    BuildContext context,
+    MusicController controller,
+    String collectionTitle,
+    Track track,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    final accent = colorFromHex(track.color);
+    final title = collectionTitle.toLowerCase();
+    final icon = title.contains('chart')
+        ? Icons.leaderboard_rounded
+        : title.contains('recent')
+            ? Icons.new_releases_rounded
+            : title.contains('mix')
+                ? Icons.auto_awesome_rounded
+                : Icons.favorite_rounded;
+    return SizedBox(
+      width: 276,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 12, bottom: 4),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          clipBehavior: Clip.antiAlias,
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  accent.withValues(alpha: .32),
+                  colors.surfaceContainerHighest.withValues(alpha: .86),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: accent.withValues(alpha: .3)),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: .12),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: InkWell(
+              onTap: () => controller.play(track),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Artwork(
+                      color: track.color,
+                      label: track.album,
+                      imageUrl: track.artworkUrl,
+                      size: 82,
+                    ),
+                    const SizedBox(width: 13),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(icon, size: 19, color: colors.primary),
+                          const SizedBox(height: 8),
+                          Text(
+                            track.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            track.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.play_circle_fill_rounded,
+                        size: 29, color: colors.primary),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showRecommended(BuildContext context, RecommendedPlaylist playlist) {
     showModalBottomSheet<void>(
       context: context,
@@ -499,7 +651,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 track: track,
                 onTap: () {
                   context.read<MusicController>().play(track,
-                      sequence: playlist.tracks, loopSequence: true);
+                      sequence: playlist.tracks,
+                      loopSequence: true,
+                      sourceLabel:
+                          'Recommended playlist • ${playlist.name} • ${playlist.subtype}');
                   Navigator.pop(sheetContext);
                 },
                 onMore: () => showTrackActions(context, track),
@@ -577,6 +732,141 @@ class _HomeScreenState extends State<HomeScreen> {
           FilledButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Got it'))
+        ],
+      ),
+    );
+  }
+}
+
+class _AllAlbumsScreen extends StatefulWidget {
+  const _AllAlbumsScreen({required this.albums});
+
+  final List<Album> albums;
+
+  @override
+  State<_AllAlbumsScreen> createState() => _AllAlbumsScreenState();
+}
+
+class _AllAlbumsScreenState extends State<_AllAlbumsScreen> {
+  final SearchController _searchController = SearchController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.trim().toLowerCase();
+    final albums = query.isEmpty
+        ? widget.albums
+        : widget.albums.where((album) {
+            return [
+              album.title,
+              album.artist,
+              album.year.toString(),
+              ...album.tracks.expand((track) => [
+                    track.title,
+                    track.artist,
+                    track.singers,
+                  ]),
+            ].any((value) => value.toLowerCase().contains(query));
+          }).toList(growable: false);
+    return Scaffold(
+      appBar: AppBar(title: const Text('All albums')),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+            child: SearchBar(
+              controller: _searchController,
+              leading: const Icon(Icons.search_rounded),
+              hintText: 'Search albums, artists, or songs…',
+              trailing: _query.isEmpty
+                  ? null
+                  : [
+                      IconButton(
+                        tooltip: 'Clear search',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _query = '');
+                        },
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+              onChanged: (value) => setState(() => _query = value),
+            ),
+          ),
+          Expanded(
+            child: albums.isEmpty
+                ? const Center(
+                    child: Text('No matching albums or songs found.'),
+                  )
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final columns =
+                          (constraints.maxWidth / 190).floor().clamp(2, 7);
+                      return GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          mainAxisSpacing: 18,
+                          crossAxisSpacing: 14,
+                          childAspectRatio: .78,
+                        ),
+                        itemCount: albums.length,
+                        itemBuilder: (context, index) {
+                          final album = albums[index];
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AlbumDetailScreen(album: album),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: LayoutBuilder(
+                                    builder: (context, tile) => Artwork(
+                                        color: album.color,
+                                        label: album.title,
+                                        imageUrl: album.artworkUrl,
+                                        icon: album.isMovie
+                                            ? Icons.movie_rounded
+                                            : Icons.album_rounded,
+                                        size: tile.maxWidth),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  album.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w900),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  album.isMovie
+                                      ? 'Movie • ${album.year}'
+                                      : album.artist,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+          ),
         ],
       ),
     );

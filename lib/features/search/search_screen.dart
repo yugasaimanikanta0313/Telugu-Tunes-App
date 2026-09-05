@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/models/music_models.dart';
 import '../../state/music_controller.dart';
@@ -16,6 +17,41 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final _input = TextEditingController();
   _SearchFilter _filter = _SearchFilter.all;
+  List<String> _recentSearches = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecentSearches();
+  }
+
+  Future<void> _loadRecentSearches() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() => _recentSearches =
+          preferences.getStringList('recent_music_searches') ?? const []);
+    }
+  }
+
+  Future<void> _rememberSearch(String query) async {
+    final clean = query.trim();
+    if (clean.length < 2) return;
+    final updated = [
+      clean,
+      ..._recentSearches
+          .where((value) => value.toLowerCase() != clean.toLowerCase()),
+    ].take(8).toList(growable: false);
+    setState(() => _recentSearches = updated);
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setStringList('recent_music_searches', updated);
+  }
+
+  void _useRecentSearch(String query) {
+    _input.text = query;
+    _input.selection = TextSelection.collapsed(offset: query.length);
+    _search(query);
+    _rememberSearch(query);
+  }
 
   @override
   void dispose() {
@@ -76,6 +112,7 @@ class _SearchScreenState extends State<SearchScreen> {
               TextField(
                 controller: _input,
                 onChanged: _search,
+                onSubmitted: _rememberSearch,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: 'Songs, artists, albums or movies',
@@ -110,6 +147,37 @@ class _SearchScreenState extends State<SearchScreen> {
                   }).toList(),
                 ),
               ),
+              if (!hasQuery && _recentSearches.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('Recent searches',
+                          style: TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        setState(() => _recentSearches = const []);
+                        final preferences =
+                            await SharedPreferences.getInstance();
+                        await preferences.remove('recent_music_searches');
+                      },
+                      child: const Text('Clear'),
+                    ),
+                  ],
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: _recentSearches
+                      .map((value) => ActionChip(
+                            avatar: const Icon(Icons.history_rounded, size: 17),
+                            label: Text(value),
+                            onPressed: () => _useRecentSearch(value),
+                          ))
+                      .toList(),
+                ),
+              ],
             ]),
           ),
         ),
@@ -136,6 +204,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       onTap: () {
                         _input.text = album.title;
                         _search(album.title);
+                        _rememberSearch(album.title);
                       },
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
@@ -235,7 +304,10 @@ class _SearchScreenState extends State<SearchScreen> {
                 onTap: playlist.tracks.isEmpty
                     ? null
                     : () => controller.play(playlist.tracks.first,
-                        sequence: playlist.tracks, loopSequence: true),
+                        sequence: playlist.tracks,
+                        loopSequence: true,
+                        sourceLabel:
+                            '${playlist.subtitle} • ${playlist.title}'),
               );
             },
           ),

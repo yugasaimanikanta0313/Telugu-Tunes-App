@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../../domain/models/music_models.dart';
@@ -37,10 +35,11 @@ class NowPlayingScreen extends StatelessWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                colorFromHex(track.color).withOpacity(.74),
-                TeluguTunesColors.background.withValues(alpha: .72),
-                TeluguTunesColors.background.withValues(alpha: .94),
+                const Color(0xFF6729D8),
+                const Color(0xFF2A1251),
+                const Color(0xFF0B0615),
               ],
+              stops: const [0, .4, 1],
             ),
           ),
           child: SafeArea(
@@ -175,14 +174,6 @@ class NowPlayingScreen extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
                               IconButton(
-                                onPressed: controller.toggleShuffle,
-                                tooltip: 'Shuffle',
-                                color: controller.shuffleEnabled
-                                    ? Theme.of(context).colorScheme.primary
-                                    : null,
-                                icon: const Icon(Icons.shuffle_rounded),
-                              ),
-                              IconButton(
                                 onPressed: controller.skipPrevious,
                                 iconSize: 37,
                                 tooltip: 'Previous',
@@ -204,6 +195,20 @@ class NowPlayingScreen extends StatelessWidget {
                                 tooltip: 'Next',
                                 icon: const Icon(Icons.skip_next_rounded),
                               ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              IconButton(
+                                onPressed: controller.toggleShuffle,
+                                tooltip: 'Shuffle',
+                                color: controller.shuffleEnabled
+                                    ? Theme.of(context).colorScheme.primary
+                                    : null,
+                                icon: const Icon(Icons.shuffle_rounded),
+                              ),
                               IconButton(
                                 onPressed: controller.toggleRepeat,
                                 tooltip: 'Repeat',
@@ -211,6 +216,11 @@ class NowPlayingScreen extends StatelessWidget {
                                     ? Theme.of(context).colorScheme.primary
                                     : null,
                                 icon: const Icon(Icons.repeat_rounded),
+                              ),
+                              IconButton(
+                                onPressed: () => _showPlaybackQueue(context),
+                                tooltip: 'Playback queue',
+                                icon: const Icon(Icons.queue_music_rounded),
                               ),
                               IconButton(
                                 onPressed: () =>
@@ -328,6 +338,111 @@ class NowPlayingScreen extends StatelessWidget {
     );
     if (selected != null) controller.startSleepTimer(selected);
   }
+
+  Future<void> _showPlaybackQueue(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const _PlaybackQueueSheet(),
+    );
+  }
+}
+
+class _PlaybackQueueSheet extends StatelessWidget {
+  const _PlaybackQueueSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.watch<MusicController>();
+    final queue = controller.playbackQueue;
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .72,
+        child: Column(
+          children: [
+            ListTile(
+              title: const Text('Playback queue',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+              subtitle: Text(controller.playbackSourceLabel),
+              trailing: TextButton(
+                onPressed:
+                    queue.length > 1 ? controller.clearUpcomingQueue : null,
+                child: const Text('Clear upcoming'),
+              ),
+            ),
+            const Divider(height: 1),
+            if (queue.isEmpty)
+              const Expanded(
+                child: EmptyState(
+                  icon: Icons.queue_music_rounded,
+                  title: 'Queue is empty',
+                  body: 'Choose a song or playlist to create a queue.',
+                ),
+              )
+            else
+              Expanded(
+                child: ReorderableListView.builder(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  itemCount: queue.length,
+                  onReorder: controller.reorderPlaybackQueue,
+                  itemBuilder: (context, index) {
+                    final track = queue[index];
+                    final current = track.id == controller.current?.id;
+                    return ListTile(
+                      key: ValueKey('queue-${track.id}'),
+                      leading: Artwork(
+                        color: track.color,
+                        label: track.album,
+                        imageUrl: track.artworkUrl,
+                        size: 46,
+                      ),
+                      title: Text(track.title,
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(current
+                          ? 'Now playing • ${track.artist}'
+                          : '${index + 1}. ${track.artist}'),
+                      trailing: current
+                          ? const Icon(Icons.graphic_eq_rounded)
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                PopupMenuButton<String>(
+                                  tooltip: 'Queue actions',
+                                  onSelected: (value) {
+                                    if (value == 'next') {
+                                      controller.playNextInQueue(track);
+                                    } else {
+                                      controller.removeFromPlaybackQueue(track);
+                                    }
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(
+                                        value: 'next',
+                                        child: Text('Play next')),
+                                    PopupMenuItem(
+                                        value: 'remove',
+                                        child: Text('Remove from queue')),
+                                  ],
+                                ),
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(10),
+                                    child: Icon(Icons.drag_handle_rounded),
+                                  ),
+                                ),
+                              ],
+                            ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _LyricsPanel extends StatelessWidget {
@@ -436,15 +551,6 @@ class _LyricsPanel extends StatelessWidget {
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   label: const Text('Edit LRC'),
                 ),
-                TextButton.icon(
-                  onPressed: lyrics?.hasLyrics == true
-                      ? () => _generateEnglish(context)
-                      : null,
-                  icon: const Icon(Icons.translate_rounded, size: 18),
-                  label: Text(lyrics?.hasEnglish == true
-                      ? 'Regenerate English'
-                      : 'Generate English'),
-                ),
               ],
             ),
           ],
@@ -466,110 +572,6 @@ class _LyricsPanel extends StatelessWidget {
       result = line;
     }
     return result ?? lines.first;
-  }
-
-  Future<void> _generateEnglish(BuildContext context) async {
-    final lyrics = controller.currentLyrics;
-    if (lyrics == null || !lyrics.hasLyrics) return;
-    final timestamp = RegExp(r'^(\[[^\]]+\]\s*)(.*)$');
-    final sourceLines = lyrics.syncedLyrics.trim().isNotEmpty
-        ? lyrics.syncedLyrics.split(RegExp(r'\r?\n'))
-        : lyrics.plainLyrics.split(RegExp(r'\r?\n'));
-    final prefixes = <String>[];
-    final texts = <String>[];
-    for (final raw in sourceLines) {
-      final match = timestamp.firstMatch(raw.trim());
-      prefixes.add(match?.group(1) ?? '');
-      texts.add((match?.group(2) ?? raw).trim());
-    }
-    try {
-      final response = await http
-          .post(
-            Uri.parse('http://127.0.0.1:8765/translate'),
-            headers: const {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'sourceLanguage': 'tel_Telu',
-              'targetLanguage': 'eng_Latn',
-              'lines': texts,
-            }),
-          )
-          .timeout(const Duration(minutes: 5));
-      if (response.statusCode != 200) {
-        throw StateError('Local translator returned ${response.statusCode}.');
-      }
-      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-      final translated = (decoded['translations'] as List?)
-              ?.map((value) => value.toString().trim())
-              .toList() ??
-          const <String>[];
-      if (translated.length != texts.length) {
-        throw StateError('The translator returned an incomplete result.');
-      }
-      final englishSynced = List.generate(translated.length,
-          (index) => '${prefixes[index]}${translated[index]}').join('\n');
-      final englishPlain = translated.join('\n');
-      if (!context.mounted) return;
-      await _reviewEnglish(context, englishPlain, englishSynced);
-    } catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            'Start the IndicTrans2 Admin Translator on this computer, then try again. ${error.toString().replaceFirst('Bad state: ', '')}'),
-      ));
-    }
-  }
-
-  Future<void> _reviewEnglish(
-      BuildContext context, String plainValue, String syncedValue) async {
-    final synced = TextEditingController(text: syncedValue);
-    final plain = TextEditingController(text: plainValue);
-    final save = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Review English lyrics for ${track.title}'),
-        content: SizedBox(
-          width: 680,
-          child: SingleChildScrollView(
-            child: Column(children: [
-              const Text(
-                  'IndicTrans2 created this draft locally. Correct names, idioms and poetic meaning before publishing.'),
-              const SizedBox(height: 12),
-              TextField(
-                controller: synced,
-                minLines: 10,
-                maxLines: 16,
-                decoration: const InputDecoration(
-                    labelText: 'Timestamped English lyrics'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: plain,
-                minLines: 5,
-                maxLines: 10,
-                decoration:
-                    const InputDecoration(labelText: 'Plain English lyrics'),
-              ),
-            ]),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel')),
-          FilledButton.icon(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              icon: const Icon(Icons.publish_rounded),
-              label: const Text('Approve & publish')),
-        ],
-      ),
-    );
-    if (save != true) return;
-    await controller.updateLyricsTranslation(track,
-        englishPlainLyrics: plain.text, englishSyncedLyrics: synced.text);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('English lyrics published.')));
-    }
   }
 
   void _showLyrics(BuildContext context) {

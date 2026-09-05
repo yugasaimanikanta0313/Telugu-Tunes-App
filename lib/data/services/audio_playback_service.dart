@@ -60,7 +60,17 @@ class AudioPlaybackService {
   final String _apiBaseUrl;
   final String _authToken;
   final Future<String?> Function(String trackId) _localPathForTrack;
-  final AudioPlayer _player = AudioPlayer();
+  final AudioPlayer _player = AudioPlayer(
+    audioLoadConfiguration: const AudioLoadConfiguration(
+      androidLoadControl: AndroidLoadControl(
+        minBufferDuration: Duration(seconds: 3),
+        maxBufferDuration: Duration(seconds: 25),
+        bufferForPlaybackDuration: Duration(milliseconds: 350),
+        bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 900),
+        prioritizeTimeOverSizeThresholds: true,
+      ),
+    ),
+  );
   final _position = StreamController<Duration>.broadcast();
   final _duration = StreamController<Duration?>.broadcast();
   final _playing = StreamController<bool>.broadcast();

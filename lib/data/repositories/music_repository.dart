@@ -52,9 +52,16 @@ abstract class MusicRepository {
     bool? active,
     bool? isAdmin,
   });
+  Future<void> sendActivityHeartbeat({
+    required bool appActive,
+    required bool playing,
+    required String trackId,
+    required int listenedSeconds,
+  });
   Future<Uint8List> exportBackup();
   Future<Uint8List> exportSongCatalog();
   Future<void> restoreBackup(Uint8List bytes);
+  Future<BackupPreview> previewBackup(Uint8List bytes);
   Future<MetadataCatalogImportResult> uploadMetadataCatalog(
       String fileName, Uint8List bytes);
   Future<CatalogTrackMetadata?> matchMetadataCatalog(String fileName);
@@ -208,11 +215,27 @@ class SpringBootMusicRepository implements MusicRepository {
   }) =>
       _api.updateAdminMember(memberId, active: active, isAdmin: isAdmin);
   @override
+  Future<void> sendActivityHeartbeat({
+    required bool appActive,
+    required bool playing,
+    required String trackId,
+    required int listenedSeconds,
+  }) =>
+      _api.sendActivityHeartbeat(
+        appActive: appActive,
+        playing: playing,
+        trackId: trackId,
+        listenedSeconds: listenedSeconds,
+      );
+  @override
   Future<Uint8List> exportBackup() => _api.exportBackup();
   @override
   Future<Uint8List> exportSongCatalog() => _api.exportSongCatalog();
   @override
   Future<void> restoreBackup(Uint8List bytes) => _api.restoreBackup(bytes);
+  @override
+  Future<BackupPreview> previewBackup(Uint8List bytes) =>
+      _api.previewBackup(bytes);
   @override
   Future<MetadataCatalogImportResult> uploadMetadataCatalog(
           String fileName, Uint8List bytes) =>
@@ -628,6 +651,14 @@ class MockMusicRepository implements MusicRepository {
       Future.error(StateError('Member management needs the private backend.'));
 
   @override
+  Future<void> sendActivityHeartbeat({
+    required bool appActive,
+    required bool playing,
+    required String trackId,
+    required int listenedSeconds,
+  }) async {}
+
+  @override
   Future<Uint8List> exportBackup() async => Uint8List.fromList(utf8.encode(
         '{"schemaVersion":1,"tracks":[],"albums":[],"playlists":[],"lyrics":[]}',
       ));
@@ -637,6 +668,15 @@ class MockMusicRepository implements MusicRepository {
 
   @override
   Future<void> restoreBackup(Uint8List bytes) async {}
+  @override
+  Future<BackupPreview> previewBackup(Uint8List bytes) async =>
+      const BackupPreview(
+          exportedAt: null,
+          tracks: 0,
+          albums: 0,
+          playlists: 0,
+          recommendedPlaylists: 0,
+          lyrics: 0);
   @override
   Future<MetadataCatalogImportResult> uploadMetadataCatalog(
           String fileName, Uint8List bytes) async =>

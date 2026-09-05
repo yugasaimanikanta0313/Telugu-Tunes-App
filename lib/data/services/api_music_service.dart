@@ -66,9 +66,16 @@ abstract class MusicApiService {
     bool? active,
     bool? isAdmin,
   });
+  Future<void> sendActivityHeartbeat({
+    required bool appActive,
+    required bool playing,
+    required String trackId,
+    required int listenedSeconds,
+  });
   Future<Uint8List> exportBackup();
   Future<Uint8List> exportSongCatalog();
   Future<void> restoreBackup(Uint8List bytes);
+  Future<BackupPreview> previewBackup(Uint8List bytes);
   Future<MetadataCatalogImportResult> uploadMetadataCatalog(
       String fileName, Uint8List bytes);
   Future<CatalogTrackMetadata?> matchMetadataCatalog(String fileName);
@@ -538,6 +545,20 @@ class SpringBootMusicApiService implements MusicApiService {
       }));
 
   @override
+  Future<void> sendActivityHeartbeat({
+    required bool appActive,
+    required bool playing,
+    required String trackId,
+    required int listenedSeconds,
+  }) =>
+      _postEmpty('/activity/heartbeat', {
+        'appActive': appActive,
+        'playing': playing,
+        'trackId': trackId,
+        'listenedSeconds': listenedSeconds,
+      });
+
+  @override
   Future<Uint8List> exportBackup() async {
     final response = await _client.get(
       Uri.parse(config.baseUrl + '/admin/backup'),
@@ -571,6 +592,16 @@ class SpringBootMusicApiService implements MusicApiService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(_errorMessage(response));
     }
+  }
+
+  @override
+  Future<BackupPreview> previewBackup(Uint8List bytes) async {
+    final response = await _client.post(
+      Uri.parse('${config.baseUrl}/admin/backup/preview'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: bytes,
+    );
+    return BackupPreview.fromJson(_decodeMap(response));
   }
 
   @override
@@ -1060,6 +1091,9 @@ class SpringBootMusicApiService implements MusicApiService {
         active: json['active'] as bool? ?? false,
         isAdmin: json['admin'] as bool? ?? false,
         isOwner: json['owner'] as bool? ?? false,
+        online: json['online'] as bool? ?? false,
+        lastSeenAt: DateTime.tryParse(json['lastSeenAt'] as String? ?? ''),
+        listeningSeconds: (json['listeningSeconds'] as num?)?.toInt() ?? 0,
       );
 
   ListeningRoom _room(Map<String, dynamic> room) => ListeningRoom(

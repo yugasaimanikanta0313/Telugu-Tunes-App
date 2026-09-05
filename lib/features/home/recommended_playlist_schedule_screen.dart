@@ -213,7 +213,9 @@ class _SubtypeScheduleCard extends StatelessWidget {
                   onPressed: () => context.read<MusicController>().play(
                       playlist.tracks.first,
                       sequence: playlist.tracks,
-                      loopSequence: true),
+                      loopSequence: true,
+                      sourceLabel:
+                          'Recommended playlist • ${playlist.name} • ${playlist.subtype}'),
                 ),
           children: playlist.tracks.isEmpty
               ? const [
@@ -226,7 +228,10 @@ class _SubtypeScheduleCard extends StatelessWidget {
                   .map((track) => TrackTile(
                         track: track,
                         onTap: () => context.read<MusicController>().play(track,
-                            sequence: playlist.tracks, loopSequence: true),
+                            sequence: playlist.tracks,
+                            loopSequence: true,
+                            sourceLabel:
+                                'Recommended playlist • ${playlist.name} • ${playlist.subtype}'),
                         onMore: () => showTrackActions(context, track),
                       ))
                   .toList(),

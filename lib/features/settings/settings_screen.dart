@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/music_controller.dart';
 import '../../data/services/api_music_service.dart';
+import '../../domain/models/music_models.dart';
 import '../auth/sign_in_screen.dart';
 import '../admin/member_management_screen.dart';
 import '../admin/recommended_playlists_screen.dart';
@@ -352,12 +353,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _showMessage('Could not read the selected backup.', error: true);
       return;
     }
+    BackupPreview preview;
+    try {
+      preview = await controller.previewBackup(bytes);
+    } catch (error) {
+      if (mounted) _showMessage(_cleanError(error), error: true);
+      return;
+    }
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Restore this backup?'),
-            content: const Text(
-                'Songs, albums, playlists and lyrics will be merged. Existing records not present in the backup will not be deleted.'),
+            content: Text(
+              'Safe restore preview\n\n'
+              '${preview.tracks} songs • ${preview.albums} albums\n'
+              '${preview.playlists} personal playlists • '
+              '${preview.recommendedPlaylists} recommended playlists\n'
+              '${preview.lyrics} lyric files\n\n'
+              'Exported ${preview.exportedAt}. Records will be merged; existing '
+              'records missing from the backup will not be deleted.',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),

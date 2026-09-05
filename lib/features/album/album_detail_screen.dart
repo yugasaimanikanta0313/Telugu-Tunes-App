@@ -98,7 +98,8 @@ class AlbumDetailScreen extends StatelessWidget {
                               ? null
                               : () => context.read<MusicController>().play(
                                   album.tracks.first,
-                                  sequence: album.tracks),
+                                  sequence: album.tracks,
+                                  sourceLabel: 'Album • ${album.title}'),
                           icon: const Icon(Icons.play_arrow_rounded),
                           label: const Text('Play'),
                         ),
@@ -134,9 +135,9 @@ class AlbumDetailScreen extends StatelessWidget {
               return TrackTile(
                   track: track,
                   index: index + 1,
-                  onTap: () => context
-                      .read<MusicController>()
-                      .play(track, sequence: album.tracks),
+                  onTap: () => context.read<MusicController>().play(track,
+                      sequence: album.tracks,
+                      sourceLabel: 'Album • ${album.title}'),
                   onMore: () => showTrackActions(context, track));
             },
           ),

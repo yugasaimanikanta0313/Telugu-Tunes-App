@@ -88,15 +88,32 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                           Card(
                             child: ListTile(
                               leading: CircleAvatar(
-                                child: Text(member.displayName.isEmpty
-                                    ? '?'
-                                    : member.displayName[0].toUpperCase()),
+                                backgroundColor: member.online
+                                    ? Colors.green.withValues(alpha: .2)
+                                    : null,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Text(member.displayName.isEmpty
+                                        ? '?'
+                                        : member.displayName[0].toUpperCase()),
+                                    Positioned(
+                                      right: -7,
+                                      bottom: -7,
+                                      child: Icon(Icons.circle,
+                                          size: 13,
+                                          color: member.online
+                                              ? Colors.greenAccent
+                                              : Colors.grey),
+                                    ),
+                                  ],
+                                ),
                               ),
                               title: Text(member.displayName,
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w700)),
                               subtitle: Text(
-                                '${member.email}\n${member.isOwner ? 'Owner' : member.isAdmin ? 'Administrator' : 'Member'} • ${member.active ? 'Active' : 'Disabled'}',
+                                '${member.email}\n${member.isOwner ? 'Owner' : member.isAdmin ? 'Administrator' : 'Member'} • ${member.active ? 'Account enabled' : 'Account disabled'}\n${member.online ? 'Online now' : _lastSeen(member.lastSeenAt)} • Listened ${_listeningTime(member.listeningSeconds)}',
                               ),
                               isThreeLine: true,
                               trailing: PopupMenuButton<_MemberAction>(
@@ -128,6 +145,23 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                     ),
                   ),
       );
+}
+
+String _listeningTime(int seconds) {
+  final duration = Duration(seconds: seconds);
+  if (duration.inHours > 0) {
+    return '${duration.inHours}h ${duration.inMinutes.remainder(60)}m';
+  }
+  return '${duration.inMinutes}m';
+}
+
+String _lastSeen(DateTime? value) {
+  if (value == null) return 'Never active';
+  final difference = DateTime.now().difference(value.toLocal());
+  if (difference.inMinutes < 1) return 'Last seen just now';
+  if (difference.inHours < 1) return 'Last seen ${difference.inMinutes}m ago';
+  if (difference.inDays < 1) return 'Last seen ${difference.inHours}h ago';
+  return 'Last seen ${difference.inDays}d ago';
 }
 
 enum _MemberAction { toggleAdmin, toggleActive }

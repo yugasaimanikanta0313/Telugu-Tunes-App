@@ -30,6 +30,9 @@ class AdminMember {
     required this.active,
     required this.isAdmin,
     required this.isOwner,
+    this.online = false,
+    this.lastSeenAt,
+    this.listeningSeconds = 0,
   });
 
   final String id;
@@ -38,6 +41,9 @@ class AdminMember {
   final bool active;
   final bool isAdmin;
   final bool isOwner;
+  final bool online;
+  final DateTime? lastSeenAt;
+  final int listeningSeconds;
 }
 
 class Track {
@@ -426,6 +432,93 @@ class TrackMetadataSuggestion {
   final bool generated;
   final String notice;
   final List<ArtworkCandidate> artworkCandidates;
+}
+
+class CatalogTrackMetadata {
+  const CatalogTrackMetadata({
+    required this.songName,
+    required this.primaryArtist,
+    required this.album,
+    required this.singers,
+    required this.musicDirector,
+    required this.genre,
+    required this.artworkUrl,
+  });
+
+  final String songName;
+  final String primaryArtist;
+  final String album;
+  final String singers;
+  final String musicDirector;
+  final String genre;
+  final String artworkUrl;
+
+  factory CatalogTrackMetadata.fromJson(Map<String, dynamic> json) =>
+      CatalogTrackMetadata(
+        songName: json['songName'] as String? ?? '',
+        primaryArtist: json['primaryArtist'] as String? ?? '',
+        album: json['album'] as String? ?? '',
+        singers: json['singers'] as String? ?? '',
+        musicDirector: json['musicDirector'] as String? ?? '',
+        genre: json['genre'] as String? ?? '',
+        artworkUrl: json['artworkUrl'] as String? ?? '',
+      );
+}
+
+class MetadataCatalogImportResult {
+  const MetadataCatalogImportResult({
+    required this.imported,
+    required this.updated,
+    required this.total,
+    required this.bucketStored,
+    required this.objectKey,
+    required this.message,
+  });
+
+  final int imported;
+  final int updated;
+  final int total;
+  final bool bucketStored;
+  final String objectKey;
+  final String message;
+
+  factory MetadataCatalogImportResult.fromJson(Map<String, dynamic> json) =>
+      MetadataCatalogImportResult(
+        imported: (json['imported'] as num?)?.toInt() ?? 0,
+        updated: (json['updated'] as num?)?.toInt() ?? 0,
+        total: (json['total'] as num?)?.toInt() ?? 0,
+        bucketStored: json['bucketStored'] as bool? ?? false,
+        objectKey: json['objectKey'] as String? ?? '',
+        message: json['message'] as String? ?? '',
+      );
+}
+
+class BackupPreview {
+  const BackupPreview({
+    required this.exportedAt,
+    required this.tracks,
+    required this.albums,
+    required this.playlists,
+    required this.recommendedPlaylists,
+    required this.lyrics,
+  });
+
+  final DateTime? exportedAt;
+  final int tracks;
+  final int albums;
+  final int playlists;
+  final int recommendedPlaylists;
+  final int lyrics;
+
+  factory BackupPreview.fromJson(Map<String, dynamic> json) => BackupPreview(
+        exportedAt: DateTime.tryParse(json['exportedAt'] as String? ?? ''),
+        tracks: (json['tracks'] as num?)?.toInt() ?? 0,
+        albums: (json['albums'] as num?)?.toInt() ?? 0,
+        playlists: (json['playlists'] as num?)?.toInt() ?? 0,
+        recommendedPlaylists:
+            (json['recommendedPlaylists'] as num?)?.toInt() ?? 0,
+        lyrics: (json['lyrics'] as num?)?.toInt() ?? 0,
+      );
 }
 
 class ArtworkCandidate {
