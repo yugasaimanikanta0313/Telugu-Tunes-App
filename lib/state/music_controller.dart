@@ -430,17 +430,25 @@ class MusicController extends ChangeNotifier {
     if (finished == null || allTracks.isEmpty) return;
     final sequenceIndex =
         _playbackSequence.indexWhere((track) => track.id == finished.id);
+    if (_loopPlaybackSequence) {
+      if (_playbackSequence.isEmpty) {
+        playing = false;
+        notifyListeners();
+        return;
+      }
+      final nextIndex =
+          sequenceIndex >= 0 && sequenceIndex + 1 < _playbackSequence.length
+              ? sequenceIndex + 1
+              : 0;
+      await _playTrack(_playbackSequence[nextIndex]);
+      return;
+    }
     if (sequenceIndex >= 0) {
       if (sequenceIndex + 1 < _playbackSequence.length) {
         await _playTrack(_playbackSequence[sequenceIndex + 1]);
         return;
       }
-      if (_loopPlaybackSequence && _playbackSequence.isNotEmpty) {
-        await _playTrack(_playbackSequence.first);
-        return;
-      }
       _playbackSequence = const [];
-      _loopPlaybackSequence = false;
     }
     final index = allTracks.indexWhere((track) => track.id == finished.id);
     final nextIndex = index < 0 ? 0 : (index + 1) % allTracks.length;
