@@ -1,5 +1,6 @@
 param(
-    [string]$OutputDirectory = "D:\Telegram\flutter-apk"
+    [string]$OutputDirectory = "D:\Telegram\flutter-apk",
+    [string]$ApiBaseUrl = "http://129.225.82.162:8080/api/v1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,6 +18,9 @@ function Invoke-Checked {
 
 if (-not (Test-Path -LiteralPath $signingProperties)) {
     throw "Production signing is not configured. Restore android/key.properties first."
+}
+if (-not $ApiBaseUrl.StartsWith("http")) {
+    throw "A reachable production API URL is required."
 }
 
 $pubspec = Get-Content -LiteralPath $pubspecPath -Raw
@@ -39,7 +43,9 @@ try {
     Invoke-Checked { flutter pub get } "Dependency resolution"
     Invoke-Checked { flutter analyze --no-fatal-infos } "Flutter analysis"
     Invoke-Checked { flutter test } "Flutter tests"
-    Invoke-Checked { flutter build apk --release } "Android release build"
+    Invoke-Checked {
+        flutter build apk --release --dart-define="API_BASE_URL=$ApiBaseUrl"
+    } "Android release build"
     New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
     $destination = Join-Path $OutputDirectory "telugu-tunes-$versionName+$nextBuild.apk"
     Copy-Item -LiteralPath "build\app\outputs\flutter-apk\app-release.apk" `
