@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/music_controller.dart';
@@ -8,6 +11,7 @@ import '../auth/sign_in_screen.dart';
 import '../home/home_screen.dart';
 import '../import/import_music_sheet.dart';
 import '../library/library_screen.dart';
+import '../messages/messages_screen.dart';
 import '../player/now_playing_screen.dart';
 import '../room/room_screen.dart';
 import '../search/search_screen.dart';
@@ -26,12 +30,20 @@ class AppShell extends StatefulWidget {
     LibraryScreen(),
     RoomScreen(),
   ];
-  static const _labels = ['Home', 'Search', 'Library', 'Room', 'Settings'];
+  static const _labels = [
+    'Home',
+    'Search',
+    'Library',
+    'Room',
+    'Messages',
+    'Settings'
+  ];
   static const _icons = [
     Icons.home_rounded,
     Icons.search_rounded,
     Icons.library_music_rounded,
     Icons.group_rounded,
+    Icons.chat_bubble_rounded,
     Icons.settings_rounded
   ];
 
@@ -41,12 +53,58 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final _pageNavigatorKeys =
-      List.generate(5, (_) => GlobalKey<NavigatorState>());
+      List.generate(6, (_) => GlobalKey<NavigatorState>());
+  final List<int> _tabHistory = [0];
+  Timer? _chatRetry;
+
+  void _selectTab(int tab) {
+    final controller = context.read<MusicController>();
+    if (tab == controller.activeTab) return;
+    _tabHistory.add(tab);
+    controller.setTab(tab);
+  }
+
+  Future<void> _handleBack() async {
+    final controller = context.read<MusicController>();
+    final navigator = _pageNavigatorKeys[controller.activeTab].currentState;
+    if (navigator != null && navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+    if (_tabHistory.length > 1) {
+      _tabHistory.removeLast();
+      controller.setTab(_tabHistory.last);
+      return;
+    }
+    if (!mounted) return;
+    final exit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Exit Telugu Tunes?'),
+        content: const Text('Are you sure you want to exit the app?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Stay')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Exit')),
+        ],
+      ),
+    );
+    if (exit == true && mounted) SystemNavigator.pop();
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _chatRetry = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) unawaited(flushChatQueue(context.read<MusicController>()));
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(flushChatQueue(context.read<MusicController>()));
+    });
   }
 
   @override
@@ -54,10 +112,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     context
         .read<MusicController>()
         .setAppActive(state == AppLifecycleState.resumed);
+    if (state == AppLifecycleState.resumed) {
+      unawaited(flushChatQueue(context.read<MusicController>()));
+    }
   }
 
   @override
   void dispose() {
+    _chatRetry?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -76,6 +138,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           ? AppShell._primaryPages[3]
           : _SignInRequiredScreen(
               feature: 'listening rooms', onSignIn: widget.onSignIn),
+      controller.isAuthenticated
+          ? const MessagesScreen()
+          : _SignInRequiredScreen(
+              feature: 'private messages', onSignIn: widget.onSignIn),
       SettingsScreen(onSignOut: widget.onSignOut, onSignIn: widget.onSignIn),
     ];
     return LayoutBuilder(
@@ -96,7 +162,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               ),
             ),
             if (controller.current != null &&
-                controller.activeTab != 4 &&
+                controller.activeTab != 5 &&
                 !controller.nowPlayingScreenVisible)
               _MiniPlayer(
                 onOpen: () => pageNavigatorKey.currentState?.push<void>(
@@ -114,51 +180,57 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             child: pageContent,
           ),
         );
-        return Scaffold(
-          body: MusicalAurora(
-            child: wide
-                ? Row(
-                    children: [
-                      NavigationRail(
-                        selectedIndex: controller.activeTab,
-                        onDestinationSelected: controller.setTab,
-                        labelType: NavigationRailLabelType.all,
-                        leading: Padding(
-                          padding: const EdgeInsets.only(top: 16, bottom: 16),
-                          child: IconButton.filled(
-                              onPressed: controller.isAuthenticated &&
-                                      controller.isAdmin
-                                  ? () => showImportMusicSheet(context)
-                                  : null,
-                              tooltip: 'Add music',
-                              icon: const Icon(Icons.add_rounded)),
-                        ),
-                        destinations: List.generate(
-                            AppShell._labels.length,
-                            (index) => NavigationRailDestination(
-                                icon: Icon(AppShell._icons[index]),
-                                selectedIcon: Icon(AppShell._icons[index]),
-                                label: Text(AppShell._labels[index]))),
-                      ),
-                      const VerticalDivider(width: 1),
-                      Expanded(child: content),
-                    ],
-                  )
-                : content,
-          ),
-          bottomNavigationBar: wide
-              ? null
-              : NavigationBar(
-                  selectedIndex: controller.activeTab,
-                  onDestinationSelected: controller.setTab,
-                  destinations: List.generate(
-                      AppShell._labels.length,
-                      (index) => NavigationDestination(
-                          icon: Icon(AppShell._icons[index]),
-                          selectedIcon: Icon(AppShell._icons[index]),
-                          label: AppShell._labels[index])),
-                ),
-        );
+        return PopScope(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop) _handleBack();
+            },
+            child: Scaffold(
+              body: MusicalAurora(
+                child: wide
+                    ? Row(
+                        children: [
+                          NavigationRail(
+                            selectedIndex: controller.activeTab,
+                            onDestinationSelected: _selectTab,
+                            labelType: NavigationRailLabelType.all,
+                            leading: Padding(
+                              padding:
+                                  const EdgeInsets.only(top: 16, bottom: 16),
+                              child: IconButton.filled(
+                                  onPressed: controller.isAuthenticated &&
+                                          controller.isAdmin
+                                      ? () => showImportMusicSheet(context)
+                                      : null,
+                                  tooltip: 'Add music',
+                                  icon: const Icon(Icons.add_rounded)),
+                            ),
+                            destinations: List.generate(
+                                AppShell._labels.length,
+                                (index) => NavigationRailDestination(
+                                    icon: Icon(AppShell._icons[index]),
+                                    selectedIcon: Icon(AppShell._icons[index]),
+                                    label: Text(AppShell._labels[index]))),
+                          ),
+                          const VerticalDivider(width: 1),
+                          Expanded(child: content),
+                        ],
+                      )
+                    : content,
+              ),
+              bottomNavigationBar: wide
+                  ? null
+                  : NavigationBar(
+                      selectedIndex: controller.activeTab,
+                      onDestinationSelected: _selectTab,
+                      destinations: List.generate(
+                          AppShell._labels.length,
+                          (index) => NavigationDestination(
+                              icon: Icon(AppShell._icons[index]),
+                              selectedIcon: Icon(AppShell._icons[index]),
+                              label: AppShell._labels[index])),
+                    ),
+            ));
       },
     );
   }
@@ -284,26 +356,35 @@ class _MiniPlayer extends StatelessWidget {
                       Text(track.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w800)),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800)),
                       Text(track.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall),
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: const Color(0xFFE8DDF2))),
                     ])),
                 if (controller.isDownloaded(track))
                   const Padding(
                       padding: EdgeInsets.only(right: 4),
-                      child: Icon(Icons.download_done_rounded, size: 18)),
+                      child: Icon(Icons.download_done_rounded,
+                          size: 18, color: Colors.white)),
                 IconButton(
                     onPressed: controller.togglePlay,
                     tooltip: controller.playing ? 'Pause' : 'Play',
-                    icon: Icon(controller.playing
-                        ? Icons.pause_rounded
-                        : Icons.play_arrow_rounded)),
+                    icon: Icon(
+                        controller.playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        color: Colors.white)),
                 IconButton(
                     onPressed: controller.skipNext,
                     tooltip: 'Next',
-                    icon: const Icon(Icons.skip_next_rounded)),
+                    icon: const Icon(Icons.skip_next_rounded,
+                        color: Colors.white)),
               ]),
             ),
           ],

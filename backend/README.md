@@ -14,6 +14,7 @@ Spring Boot API for a private, scalable music circle. Member count is not hard-c
 - Private email/password account registration and login; raw passwords are never stored
 - Configured operator email has administrator access; only administrators can edit/delete songs or albums and manage member accounts
 - Room creation, joining by invite code, shared queue updates, and owner-or-uploader track deletion
+- Private messaging: Gmail friend requests, accepted-friend conversations, stickers, voice notes and file attachments. Chat files are stored in MongoDB GridFS and require a signed-in session to fetch. The Android client blocks operating-system screenshots while a conversation is open.
 - CORS configuration for Flutter web during development
 
 ## Before the first run

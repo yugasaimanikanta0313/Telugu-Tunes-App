@@ -1,7 +1,7 @@
 name: telugu_tunes
 description: Private Telugu music client for a small listening circle.
 publish_to: none
-version: 1.0.2+6
+version: 1.0.3+8
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -12,6 +12,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   provider: ^6.1.2
   http: ^1.2.2
+  http_parser: ^4.1.2
   file_picker: ^11.0.3
   shared_preferences: ^2.5.5
   just_audio: ^0.10.6
@@ -21,6 +22,8 @@ dependencies:
   cached_network_image: ^3.4.1
   palette_generator: ^0.3.3+7
   web_socket_channel: ^3.0.3
+  record: ^6.2.1
+  open_file: ^4.0.0
 
 dev_dependencies:
   flutter_test:
