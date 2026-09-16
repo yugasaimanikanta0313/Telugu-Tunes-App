@@ -4,10 +4,13 @@ import com.mongodb.client.gridfs.model.GridFSFile;
 import com.telugutunes.api.config.AuthenticationFilter;
 import com.telugutunes.api.domain.ChatMessageDocument;
 import com.telugutunes.api.domain.ChatAvatarDocument;
+import com.telugutunes.api.domain.AvatarStyle;
+import com.telugutunes.api.domain.ChatReadDocument;
 import com.telugutunes.api.domain.FriendshipDocument;
 import com.telugutunes.api.domain.Member;
 import com.telugutunes.api.repository.ChatMessageRepository;
 import com.telugutunes.api.repository.ChatAvatarRepository;
+import com.telugutunes.api.repository.ChatReadRepository;
 import com.telugutunes.api.repository.FriendshipRepository;
 import com.telugutunes.api.repository.MemberRepository;
 import java.io.IOException;
@@ -42,19 +45,24 @@ public class MessagesController {
   private final FriendshipRepository friendships;
   private final ChatMessageRepository messages;
   private final ChatAvatarRepository avatars;
+  private final ChatReadRepository reads;
   private final GridFsTemplate files;
 
   public MessagesController(MemberRepository members, FriendshipRepository friendships,
-      ChatMessageRepository messages, ChatAvatarRepository avatars, GridFsTemplate files) {
+      ChatMessageRepository messages, ChatAvatarRepository avatars,
+      ChatReadRepository reads, GridFsTemplate files) {
     this.members = members;
     this.friendships = friendships;
     this.messages = messages;
     this.avatars = avatars;
+    this.reads = reads;
     this.files = files;
   }
 
-  public record Person(String id, String name, String email, String avatarId, String avatarEmoji) {}
-  public record FriendView(String id, String status, boolean incoming, Person person) {}
+  public record Person(String id, String name, String email, String avatarId,
+      String avatarEmoji, AvatarStyle avatarStyle) {}
+  public record FriendView(String id, String status, boolean incoming, Person person,
+      ChatMessageDocument lastMessage, long unreadCount) {}
   public record FriendRequest(String email) {}
   public record SendMessage(String clientId, String kind, String text,
       String mediaId, String fileName) {}
@@ -69,8 +77,18 @@ public class MessagesController {
           boolean incoming = friend.recipientId().equals(self);
           String peerId = incoming ? friend.requesterId() : friend.recipientId();
           Member peer = members.findById(peerId).orElse(null);
-          return peer == null ? null : new FriendView(friend.id(), friend.status(), incoming,
-              person(peer));
+          if (peer == null) return null;
+          if (!"accepted".equals(friend.status()))
+            return new FriendView(friend.id(), friend.status(), incoming, person(peer), null, 0);
+          String pair = conversationId(self, peerId);
+          Instant cutoff = Instant.now().minusSeconds(86_400);
+          var last = messages.findTopByConversationIdAndCreatedAtAfterOrderByCreatedAtDesc(pair, cutoff)
+              .orElse(null);
+          Instant since = reads.findById(pair + ":" + self)
+              .map(ChatReadDocument::lastReadAt).filter(value -> value.isAfter(cutoff))
+              .orElse(cutoff);
+          long unread = messages.countByConversationIdAndSenderIdAndCreatedAtAfter(pair, peerId, since);
+          return new FriendView(friend.id(), friend.status(), incoming, person(peer), last, unread);
         }).filter(view -> view != null).toList();
   }
 
@@ -90,7 +108,7 @@ public class MessagesController {
     var saved = friendships.save(new FriendshipDocument(conversationId(self, peer.id()),
         self, peer.id(), "pending", Instant.now()));
     return new FriendView(saved.id(), saved.status(), false,
-        person(peer));
+        person(peer), null, 0);
   }
 
   @PostMapping("/friends/{requestId}/accept")
@@ -105,7 +123,7 @@ public class MessagesController {
         request.recipientId(), "accepted", request.createdAt()));
     Member peer = members.findById(saved.requesterId()).orElseThrow();
     return new FriendView(saved.id(), saved.status(), true,
-        person(peer));
+        person(peer), null, 0);
   }
 
   @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -117,7 +135,7 @@ public class MessagesController {
       throw new IllegalArgumentException("Choose an image up to 5 MB.");
     ObjectId id = files.store(file.getInputStream(), "avatar", file.getContentType(),
         Map.of("ownerId", self));
-    avatars.save(new ChatAvatarDocument(self, id.toHexString(), ""));
+    avatars.save(new ChatAvatarDocument(self, id.toHexString(), "", null));
     return person(members.findById(self).orElseThrow());
   }
 
@@ -127,7 +145,34 @@ public class MessagesController {
       @RequestBody AvatarChoice choice) {
     if (choice.emoji() == null || !List.of("😀", "😎", "🥳", "🐯", "🦊", "🐼", "👩", "👨", "🧑", "🎵").contains(choice.emoji()))
       throw new IllegalArgumentException("Choose an avatar from the list.");
-    avatars.save(new ChatAvatarDocument(self, "", choice.emoji()));
+    avatars.save(new ChatAvatarDocument(self, "", choice.emoji(), null));
+    return person(members.findById(self).orElseThrow());
+  }
+
+  @PostMapping("/avatar/style")
+  public Person avatarStyle(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String self,
+      @RequestBody AvatarStyle style) {
+    if (style == null
+        || !List.of("light", "tan", "brown", "deep").contains(style.skin())
+        || !List.of("short", "curly", "long", "bun", "spiky").contains(style.hair())
+        || !List.of("black", "brown", "blonde", "purple", "red").contains(style.hairColor())
+        || !List.of("round", "sleepy", "wide", "wink").contains(style.eyes())
+        || !List.of("hoodie", "jacket", "dress", "tee").contains(style.outfit())
+        || !List.of("violet", "blue", "coral", "green", "yellow").contains(style.outfitColor())
+        || !List.of("jeans", "shorts", "skirt").contains(style.bottoms())
+        || !List.of("blue", "black", "beige", "purple").contains(style.bottomColor())
+        || !List.of("wave", "stand", "dance", "hands-up").contains(style.pose())
+        || Math.abs(style.leftArm()) > 90 || Math.abs(style.rightArm()) > 90
+        || Math.abs(style.leftLeg()) > 90 || Math.abs(style.rightLeg()) > 90)
+      throw new IllegalArgumentException("Choose an avatar option from each list.");
+    avatars.save(new ChatAvatarDocument(self, "", "", style));
+    return person(members.findById(self).orElseThrow());
+  }
+
+  @GetMapping("/avatar/me")
+  public Person myAvatar(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String self) {
     return person(members.findById(self).orElseThrow());
   }
 
@@ -136,9 +181,18 @@ public class MessagesController {
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String self,
       @PathVariable String peerId) {
     requireFriends(self, peerId);
-    var result = new ArrayList<>(messages.findTop100ByConversationIdOrderByCreatedAtDesc(conversationId(self, peerId)));
+    var result = new ArrayList<>(messages.findTop100ByConversationIdAndCreatedAtAfterOrderByCreatedAtDesc(
+        conversationId(self, peerId), Instant.now().minusSeconds(86_400)));
     Collections.reverse(result);
     return result;
+  }
+
+  @PostMapping("/{peerId}/read")
+  public void markRead(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String self,
+      @PathVariable String peerId) {
+    requireFriends(self, peerId);
+    reads.save(new ChatReadDocument(conversationId(self, peerId) + ":" + self, Instant.now()));
   }
 
   @PostMapping("/{peerId}")
@@ -153,16 +207,19 @@ public class MessagesController {
     String mediaId = request.mediaId() == null ? "" : request.mediaId();
     if (text.isEmpty() && mediaId.isEmpty()) throw new IllegalArgumentException("Message is empty.");
     if (!mediaId.isEmpty()) {
+      if (!ObjectId.isValid(mediaId)) throw new IllegalArgumentException("Attachment not found.");
       GridFSFile attachment = files.findOne(Query.query(Criteria.where("_id").is(new ObjectId(mediaId))));
       if (attachment == null || attachment.getMetadata() == null
-          || !self.equals(attachment.getMetadata().getString("ownerId")))
+          || !self.equals(attachment.getMetadata().getString("ownerId"))
+          || attachment.getUploadDate().toInstant().isBefore(Instant.now().minusSeconds(86_400)))
         throw new IllegalArgumentException("Attachment not found.");
     }
     String pair = conversationId(self, peerId);
     String clientId = request.clientId() == null ? "" : request.clientId();
     if (!clientId.isEmpty()) {
       var existing = messages.findByConversationIdAndSenderIdAndClientId(pair, self, clientId);
-      if (existing.isPresent()) return existing.get();
+      if (existing.isPresent() && existing.get().createdAt().isAfter(Instant.now().minusSeconds(86_400)))
+        return existing.get();
     }
     return messages.save(new ChatMessageDocument(null, pair, self, clientId, kind,
         text, mediaId, request.fileName() == null ? "" : request.fileName(), Instant.now()));
@@ -176,7 +233,8 @@ public class MessagesController {
       throw new IllegalArgumentException("Choose a file up to 50 MB.");
     String name = file.getOriginalFilename() == null ? "attachment" : file.getOriginalFilename();
     String type = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
-    ObjectId id = files.store(file.getInputStream(), name, type, Map.of("ownerId", self));
+    ObjectId id = files.store(file.getInputStream(), name, type,
+        Map.of("ownerId", self, "kind", "chat"));
     return Map.of("id", id.toHexString(), "name", name, "contentType", type);
   }
 
@@ -192,10 +250,14 @@ public class MessagesController {
         .map(avatar -> avatar.mediaId().equals(id)
             && (owner.equals(self) || acceptedFriend(self, owner)))
         .orElse(false);
+    if (!avatarAllowed &&
+        file.getUploadDate().toInstant().isBefore(Instant.now().minusSeconds(86_400)))
+      return ResponseEntity.notFound().build();
     boolean allowed = owner.equals(self) || avatarAllowed || messages.findByMediaId(id).stream()
         .anyMatch(message -> {
           String[] pair = message.conversationId().split(":", 2);
           return pair.length == 2 && (pair[0].equals(self) || pair[1].equals(self))
+              && message.createdAt().isAfter(Instant.now().minusSeconds(86_400))
               && acceptedFriend(pair[0], pair[1]);
         });
     if (!allowed) return ResponseEntity.notFound().build();
@@ -226,10 +288,10 @@ public class MessagesController {
   }
 
   private Person person(Member member) {
-    var avatar = avatars.findById(member.id()).orElse(new ChatAvatarDocument(member.id(), "", ""));
+    var avatar = avatars.findById(member.id()).orElse(new ChatAvatarDocument(member.id(), "", "", null));
     return new Person(member.id(), member.displayName(), member.email(),
         avatar.mediaId() == null ? "" : avatar.mediaId(),
-        avatar.emoji() == null ? "" : avatar.emoji());
+        avatar.emoji() == null ? "" : avatar.emoji(), avatar.style());
   }
 
   private String conversationId(String a, String b) {

@@ -273,20 +273,19 @@ class AudioPlaybackService {
     final query = <String, String>{
       'v': track.audioVersion.isEmpty ? track.id : track.audioVersion,
     };
-    // Browsers always need a query-string ticket. Guest Android clients need
-    // one too because they do not have an Authorization header.
-    if (kIsWeb || _authToken.isEmpty) {
-      final response = await http.get(
-        Uri.parse('$_apiBaseUrl/audio/${track.id}/ticket'),
-        headers:
-            _authToken.isEmpty ? null : {'Authorization': 'Bearer $_authToken'},
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw StateError('Could not authorize browser audio playback.');
-      }
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      query['ticket'] = body['ticket'] as String;
+    // The Android media decoder can issue later range requests without the
+    // Dart HTTP headers. A track-scoped ticket keeps those requests playable.
+    final response = await http.get(
+      Uri.parse('$_apiBaseUrl/audio/${track.id}/ticket'),
+      headers:
+          _authToken.isEmpty ? null : {'Authorization': 'Bearer $_authToken'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(
+          'Could not authorize audio playback (${response.statusCode}).');
     }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    query['ticket'] = body['ticket'] as String;
     return Uri.parse('$_apiBaseUrl/audio/${track.id}')
         .replace(queryParameters: query);
   }

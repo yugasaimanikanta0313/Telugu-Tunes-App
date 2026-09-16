@@ -35,7 +35,7 @@ class AppShell extends StatefulWidget {
     'Search',
     'Library',
     'Room',
-    'Messages',
+    'Chats',
     'Settings'
   ];
   static const _icons = [
@@ -100,7 +100,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _chatRetry = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted) unawaited(flushChatQueue(context.read<MusicController>()));
+      if (mounted) {
+        final controller = context.read<MusicController>();
+        unawaited(flushChatQueue(controller));
+        unawaited(pollChatAlerts(controller));
+      }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(flushChatQueue(context.read<MusicController>()));
@@ -114,6 +118,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         .setAppActive(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed) {
       unawaited(flushChatQueue(context.read<MusicController>()));
+      unawaited(pollChatAlerts(context.read<MusicController>()));
     }
   }
 
