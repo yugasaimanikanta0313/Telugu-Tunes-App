@@ -10,6 +10,22 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
+        <meta-data android:name="com.snap.kit.clientId"
+            android:value="f662d4a2-612e-441a-9a2c-0cee20b0c627" />
+        <meta-data android:name="com.snap.kit.redirectUrl"
+            android:value="telugutunes://snap-login/oauth2" />
+        <meta-data android:name="com.snap.kit.scopes"
+            android:resource="@array/snap_connect_scopes" />
+        <activity android:name="com.snap.corekit.SnapKitActivity"
+            android:exported="true" android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="telugutunes" android:host="snap-login"
+                    android:path="/oauth2" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -59,6 +75,7 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <package android:name="com.snapchat.android" />
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

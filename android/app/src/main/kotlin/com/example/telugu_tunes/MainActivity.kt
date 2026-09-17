@@ -15,6 +15,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.snap.loginkit.BitmojiQuery
+import com.snap.loginkit.LoginResultCallback
+import com.snap.loginkit.SnapLoginProvider
+import com.snap.loginkit.UserDataQuery
+import com.snap.loginkit.UserDataResultCallback
+import com.snap.loginkit.exceptions.LoginException
+import com.snap.loginkit.exceptions.UserDataException
+import com.snap.loginkit.models.UserDataResult
 
 class MainActivity : AudioServiceActivity() {
     private var notificationPermissionResult: MethodChannel.Result? = null
@@ -56,6 +64,41 @@ class MainActivity : AudioServiceActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "telugu_tunes/snap_login")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "start") startSnapLogin(result)
+                else result.notImplemented()
+            }
+    }
+
+    private fun startSnapLogin(result: MethodChannel.Result) {
+        val login = SnapLoginProvider.get(this)
+        login.startTokenGrant(object : LoginResultCallback {
+            override fun onStart() {}
+
+            override fun onSuccess(accessToken: String) {
+                val bitmoji = BitmojiQuery.newBuilder().withTwoDAvatarUrl().build()
+                val query = UserDataQuery.newBuilder().withBitmoji(bitmoji).build()
+                login.fetchUserData(query, object : UserDataResultCallback {
+                    override fun onSuccess(userDataResult: UserDataResult) {
+                        val url = userDataResult.data?.meData?.bitmojiData?.twoDAvatarUrl
+                        runOnUiThread {
+                            if (url.isNullOrBlank()) result.error("no_bitmoji",
+                                "Allow Bitmoji Avatar access in Snapchat to use your avatar.", null)
+                            else result.success(url)
+                        }
+                    }
+
+                    override fun onFailure(exception: UserDataException) {
+                        runOnUiThread { result.error("snap_profile_failed", exception.message, null) }
+                    }
+                })
+            }
+
+            override fun onFailure(exception: LoginException) {
+                runOnUiThread { result.error("snap_login_failed", exception.message, null) }
+            }
+        })
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
