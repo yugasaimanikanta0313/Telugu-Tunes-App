@@ -60,13 +60,14 @@ public class MessagesController {
   }
 
   public record Person(String id, String name, String email, String avatarId,
-      String avatarEmoji, AvatarStyle avatarStyle) {}
+      String avatarEmoji, AvatarStyle avatarStyle, String heroPreset) {}
   public record FriendView(String id, String status, boolean incoming, Person person,
       ChatMessageDocument lastMessage, long unreadCount) {}
   public record FriendRequest(String email) {}
   public record SendMessage(String clientId, String kind, String text,
       String mediaId, String fileName) {}
   public record AvatarChoice(String emoji) {}
+  public record HeroPresetChoice(String presetId) {}
 
   @GetMapping("/friends")
   public List<FriendView> friends(
@@ -135,7 +136,7 @@ public class MessagesController {
       throw new IllegalArgumentException("Choose an image up to 5 MB.");
     ObjectId id = files.store(file.getInputStream(), "avatar", file.getContentType(),
         Map.of("ownerId", self));
-    avatars.save(new ChatAvatarDocument(self, id.toHexString(), "", null));
+    avatars.save(new ChatAvatarDocument(self, id.toHexString(), "", null, ""));
     return person(members.findById(self).orElseThrow());
   }
 
@@ -145,7 +146,7 @@ public class MessagesController {
       @RequestBody AvatarChoice choice) {
     if (choice.emoji() == null || !List.of("😀", "😎", "🥳", "🐯", "🦊", "🐼", "👩", "👨", "🧑", "🎵").contains(choice.emoji()))
       throw new IllegalArgumentException("Choose an avatar from the list.");
-    avatars.save(new ChatAvatarDocument(self, "", choice.emoji(), null));
+    avatars.save(new ChatAvatarDocument(self, "", choice.emoji(), null, ""));
     return person(members.findById(self).orElseThrow());
   }
 
@@ -174,7 +175,19 @@ public class MessagesController {
         || style.headSize() < 0 || style.headSize() > 100
         || style.rotation() < -180 || style.rotation() > 180)
       throw new IllegalArgumentException("Choose an avatar option from each list.");
-    avatars.save(new ChatAvatarDocument(self, "", "", style));
+    avatars.save(new ChatAvatarDocument(self, "", "", style, ""));
+    return person(members.findById(self).orElseThrow());
+  }
+
+  @PostMapping("/avatar/preset")
+  public Person avatarPreset(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String self,
+      @RequestBody HeroPresetChoice choice) {
+    if (choice == null || !List.of("spiderman", "ironman", "batman", "hulk",
+        "drdoom", "loki", "doraemon", "wonderwoman", "pikachu")
+        .contains(choice.presetId()))
+      throw new IllegalArgumentException("Choose an avatar from the list.");
+    avatars.save(new ChatAvatarDocument(self, "", "", null, choice.presetId()));
     return person(members.findById(self).orElseThrow());
   }
 
@@ -296,10 +309,11 @@ public class MessagesController {
   }
 
   private Person person(Member member) {
-    var avatar = avatars.findById(member.id()).orElse(new ChatAvatarDocument(member.id(), "", "", null));
+    var avatar = avatars.findById(member.id()).orElse(new ChatAvatarDocument(member.id(), "", "", null, ""));
     return new Person(member.id(), member.displayName(), member.email(),
         avatar.mediaId() == null ? "" : avatar.mediaId(),
-        avatar.emoji() == null ? "" : avatar.emoji(), avatar.style());
+        avatar.emoji() == null ? "" : avatar.emoji(), avatar.style(),
+        avatar.heroPreset() == null ? "" : avatar.heroPreset());
   }
 
   private String conversationId(String a, String b) {

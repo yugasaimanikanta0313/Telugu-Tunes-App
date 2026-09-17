@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../state/music_controller.dart';
 import 'avatar_editor.dart';
+import 'hero_avatar_picker.dart';
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
@@ -129,9 +130,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
       await Navigator.push<void>(
           context,
           MaterialPageRoute(
-            builder: (_) => AvatarEditorScreen(
+            builder: (_) => HeroAvatarPicker(
+              initialPreset: person['heroPreset'] as String?,
               initialStyle: person['avatarStyle'] as Map<String, dynamic>?,
-              onSave: (style) async {
+              onSave: (presetId) async {
+                await _ChatApi(controller)
+                    .post('/avatar/preset', {'presetId': presetId});
+                await _load();
+              },
+              onSaveCustom: (style) async {
                 await _ChatApi(controller).post('/avatar/style', style);
                 await _load();
               },
@@ -194,6 +201,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 leading: _Avatar(
                     name: person['name'] as String? ?? '?',
                     avatarId: person['avatarId'] as String? ?? '',
+                    heroPreset: person['heroPreset'] as String?,
                     avatarStyle:
                         person['avatarStyle'] as Map<String, dynamic>?),
                 title: Text(person['name'] as String? ?? ''),
@@ -247,10 +255,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, this.avatarId = '', this.avatarStyle});
+  const _Avatar(
+      {required this.name,
+      this.avatarId = '',
+      this.avatarStyle,
+      this.heroPreset});
   final String name;
   final String avatarId;
   final Map<String, dynamic>? avatarStyle;
+  final String? heroPreset;
   @override
   Widget build(BuildContext context) {
     final api = _ChatApi(context.read<MusicController>());
@@ -258,7 +271,11 @@ class _Avatar extends StatelessWidget {
       foregroundImage: avatarId.isEmpty
           ? null
           : NetworkImage('${api.base}/media/$avatarId', headers: api.headers),
-      child: AvatarFigure(style: avatarStyle, compact: true),
+      child: heroAvatarImage(heroPreset) == null
+          ? AvatarFigure(style: avatarStyle, compact: true)
+          : ClipOval(
+              child: Image.asset(heroAvatarImage(heroPreset)!,
+                  width: 48, height: 48, fit: BoxFit.cover)),
     );
   }
 }
@@ -532,6 +549,7 @@ class _ConversationScreenState extends State<_ConversationScreen>
         _Avatar(
             name: widget.peer['name'] as String? ?? '?',
             avatarId: widget.peer['avatarId'] as String? ?? '',
+            heroPreset: widget.peer['heroPreset'] as String?,
             avatarStyle: widget.peer['avatarStyle'] as Map<String, dynamic>?),
         const SizedBox(width: 10),
         Expanded(child: Text(widget.peer['name'] as String? ?? 'Chat')),
