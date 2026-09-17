@@ -60,14 +60,13 @@ public class MessagesController {
   }
 
   public record Person(String id, String name, String email, String avatarId,
-      String avatarEmoji, AvatarStyle avatarStyle, String snapAvatarUrl) {}
+      String avatarEmoji, AvatarStyle avatarStyle) {}
   public record FriendView(String id, String status, boolean incoming, Person person,
       ChatMessageDocument lastMessage, long unreadCount) {}
   public record FriendRequest(String email) {}
   public record SendMessage(String clientId, String kind, String text,
       String mediaId, String fileName) {}
   public record AvatarChoice(String emoji) {}
-  public record SnapAvatarChoice(String avatarUrl) {}
 
   @GetMapping("/friends")
   public List<FriendView> friends(
@@ -136,7 +135,7 @@ public class MessagesController {
       throw new IllegalArgumentException("Choose an image up to 5 MB.");
     ObjectId id = files.store(file.getInputStream(), "avatar", file.getContentType(),
         Map.of("ownerId", self));
-    avatars.save(new ChatAvatarDocument(self, id.toHexString(), "", null, ""));
+    avatars.save(new ChatAvatarDocument(self, id.toHexString(), "", null));
     return person(members.findById(self).orElseThrow());
   }
 
@@ -146,7 +145,7 @@ public class MessagesController {
       @RequestBody AvatarChoice choice) {
     if (choice.emoji() == null || !List.of("😀", "😎", "🥳", "🐯", "🦊", "🐼", "👩", "👨", "🧑", "🎵").contains(choice.emoji()))
       throw new IllegalArgumentException("Choose an avatar from the list.");
-    avatars.save(new ChatAvatarDocument(self, "", choice.emoji(), null, ""));
+    avatars.save(new ChatAvatarDocument(self, "", choice.emoji(), null));
     return person(members.findById(self).orElseThrow());
   }
 
@@ -161,32 +160,21 @@ public class MessagesController {
         || !List.of("short", "curly", "long", "bun", "spiky").contains(style.hair())
         || !List.of("black", "brown", "blonde", "purple", "red").contains(style.hairColor())
         || !List.of("round", "sleepy", "wide", "wink").contains(style.eyes())
-        || !List.of("hoodie", "jacket", "dress", "tee").contains(style.outfit())
+        || !List.of("hoodie", "jacket", "dress", "tee", "suit", "armor", "cape", "robe", "creature").contains(style.outfit())
         || !List.of("violet", "blue", "coral", "green", "yellow").contains(style.outfitColor())
         || !List.of("jeans", "shorts", "skirt").contains(style.bottoms())
         || !List.of("blue", "black", "beige", "purple").contains(style.bottomColor())
         || !List.of("wave", "stand", "dance", "hands-up").contains(style.pose())
         || Math.abs(style.leftArm()) > 90 || Math.abs(style.rightArm()) > 90
-        || Math.abs(style.leftLeg()) > 90 || Math.abs(style.rightLeg()) > 90)
+        || Math.abs(style.leftLeg()) > 90 || Math.abs(style.rightLeg()) > 90
+        || (style.costume() != null && !List.of("everyday", "street", "business", "gala", "web-hero", "tech-hero", "cape-hero", "night-guardian", "spooky", "witch", "masked-hero", "robot-friend", "electric-creature", "fire-dragon", "alien-shifter").contains(style.costume()))
+        || (style.accessory() != null && !List.of("none", "glasses", "sunglasses", "hat", "mask", "cape", "wings").contains(style.accessory()))
+        || (style.shoes() != null && !List.of("sneakers", "boots", "formal", "sandals").contains(style.shoes()))
+        || style.bodyWidth() < 0 || style.bodyWidth() > 100
+        || style.headSize() < 0 || style.headSize() > 100
+        || style.rotation() < -180 || style.rotation() > 180)
       throw new IllegalArgumentException("Choose an avatar option from each list.");
-    avatars.save(new ChatAvatarDocument(self, "", "", style, ""));
-    return person(members.findById(self).orElseThrow());
-  }
-
-  @PostMapping("/avatar/snap")
-  public Person snapAvatar(
-      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String self,
-      @RequestBody SnapAvatarChoice choice) {
-    String url = choice.avatarUrl() == null ? "" : choice.avatarUrl();
-    java.net.URI uri;
-    try { uri = java.net.URI.create(url); }
-    catch (IllegalArgumentException error) { throw new IllegalArgumentException("Invalid Bitmoji avatar URL."); }
-    String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(java.util.Locale.ROOT);
-    if (!"https".equalsIgnoreCase(uri.getScheme()) || url.length() > 2048
-        || !(host.equals("sdk.bitmoji.com") || host.endsWith(".bitmoji.com")
-            || host.endsWith(".sc-cdn.net") || host.endsWith(".snapchat.com")))
-      throw new IllegalArgumentException("Invalid Bitmoji avatar URL.");
-    avatars.save(new ChatAvatarDocument(self, "", "", null, url));
+    avatars.save(new ChatAvatarDocument(self, "", "", style));
     return person(members.findById(self).orElseThrow());
   }
 
@@ -308,11 +296,10 @@ public class MessagesController {
   }
 
   private Person person(Member member) {
-    var avatar = avatars.findById(member.id()).orElse(new ChatAvatarDocument(member.id(), "", "", null, ""));
+    var avatar = avatars.findById(member.id()).orElse(new ChatAvatarDocument(member.id(), "", "", null));
     return new Person(member.id(), member.displayName(), member.email(),
         avatar.mediaId() == null ? "" : avatar.mediaId(),
-        avatar.emoji() == null ? "" : avatar.emoji(), avatar.style(),
-        avatar.snapAvatarUrl() == null ? "" : avatar.snapAvatarUrl());
+        avatar.emoji() == null ? "" : avatar.emoji(), avatar.style());
   }
 
   private String conversationId(String a, String b) {

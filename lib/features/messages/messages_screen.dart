@@ -123,17 +123,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Future<void> _chooseAvatar() async {
     try {
       final controller = context.read<MusicController>();
-      final path = await Navigator.push<AvatarPath>(
-          context,
-          MaterialPageRoute(
-              builder: (_) => AvatarPathScreen(
-                    onSnapAvatar: (url) async {
-                      await _ChatApi(controller)
-                          .post('/avatar/snap', {'avatarUrl': url});
-                      await _load();
-                    },
-                  )));
-      if (path != AvatarPath.custom || !mounted) return;
       final person =
           await _ChatApi(controller).get('/avatar/me') as Map<String, dynamic>;
       if (!mounted) return;
@@ -205,7 +194,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 leading: _Avatar(
                     name: person['name'] as String? ?? '?',
                     avatarId: person['avatarId'] as String? ?? '',
-                    snapAvatarUrl: person['snapAvatarUrl'] as String? ?? '',
                     avatarStyle:
                         person['avatarStyle'] as Map<String, dynamic>?),
                 title: Text(person['name'] as String? ?? ''),
@@ -259,25 +247,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar(
-      {required this.name,
-      this.avatarId = '',
-      this.snapAvatarUrl = '',
-      this.avatarStyle});
+  const _Avatar({required this.name, this.avatarId = '', this.avatarStyle});
   final String name;
   final String avatarId;
-  final String snapAvatarUrl;
   final Map<String, dynamic>? avatarStyle;
   @override
   Widget build(BuildContext context) {
     final api = _ChatApi(context.read<MusicController>());
     return CircleAvatar(
-      foregroundImage: snapAvatarUrl.isNotEmpty
-          ? NetworkImage(snapAvatarUrl)
-          : avatarId.isEmpty
-              ? null
-              : NetworkImage('${api.base}/media/$avatarId',
-                  headers: api.headers),
+      foregroundImage: avatarId.isEmpty
+          ? null
+          : NetworkImage('${api.base}/media/$avatarId', headers: api.headers),
       child: AvatarFigure(style: avatarStyle, compact: true),
     );
   }
@@ -450,8 +430,13 @@ class _ConversationScreenState extends State<_ConversationScreen>
       if (recording) {
         final path = await recorder.stop();
         if (mounted) setState(() => recording = false);
-        if (path == null) return;
+        if (path == null || path.isEmpty) {
+          throw StateError('Recording was not saved. Please try again.');
+        }
         final bytes = await File(path).readAsBytes();
+        if (bytes.isEmpty) {
+          throw StateError('Recording is empty. Please try again.');
+        }
         final name = 'voice-${DateTime.now().millisecondsSinceEpoch}.m4a';
         await _sendAttachment('audio', name, bytes);
       } else {
@@ -476,8 +461,12 @@ class _ConversationScreenState extends State<_ConversationScreen>
     try {
       final media =
           await _ChatApi(context.read<MusicController>()).upload(name, bytes);
+      final mediaId = media['id'];
+      if (mediaId is! String || mediaId.isEmpty) {
+        throw StateError('The server did not save this attachment.');
+      }
       await _send(kind, kind == 'audio' ? 'Voice message' : name,
-          mediaId: media['id'] as String, fileName: name);
+          mediaId: mediaId, fileName: name);
     } catch (e) {
       if (e is _ChatHttpException && e.status < 500) rethrow;
       if (kIsWeb) rethrow;
@@ -543,7 +532,6 @@ class _ConversationScreenState extends State<_ConversationScreen>
         _Avatar(
             name: widget.peer['name'] as String? ?? '?',
             avatarId: widget.peer['avatarId'] as String? ?? '',
-            snapAvatarUrl: widget.peer['snapAvatarUrl'] as String? ?? '',
             avatarStyle: widget.peer['avatarStyle'] as Map<String, dynamic>?),
         const SizedBox(width: 10),
         Expanded(child: Text(widget.peer['name'] as String? ?? 'Chat')),
@@ -570,32 +558,38 @@ class _ConversationScreenState extends State<_ConversationScreen>
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 10),
-                    child: kind == 'audio' && message['mediaId'] != null
+                    child: kind == 'audio' &&
+                            message['mediaId'] is String &&
+                            (message['mediaId'] as String).isNotEmpty
                         ? _VoiceMessage(mediaId: message['mediaId'] as String)
-                        : kind == 'sticker'
-                            ? Text(message['text'] as String? ?? '',
-                                style: const TextStyle(fontSize: 42))
-                            : message['mediaId'] != null &&
-                                    (message['mediaId'] as String).isNotEmpty
-                                ? InkWell(
-                                    onTap: () => _showAttachment(message),
-                                    child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(kind == 'image'
-                                              ? Icons.image
-                                              : kind == 'video'
-                                                  ? Icons.videocam
-                                                  : kind == 'audio'
-                                                      ? Icons.mic
-                                                      : Icons.attach_file),
-                                          const SizedBox(width: 8),
-                                          Flexible(
-                                              child: Text(message['fileName']
-                                                      as String? ??
-                                                  'Attachment')),
-                                        ]))
-                                : Text(message['text'] as String? ?? ''),
+                        : kind == 'audio'
+                            ? const Text('Voice message unavailable')
+                            : kind == 'sticker'
+                                ? Text(message['text'] as String? ?? '',
+                                    style: const TextStyle(fontSize: 42))
+                                : message['mediaId'] != null &&
+                                        (message['mediaId'] as String)
+                                            .isNotEmpty
+                                    ? InkWell(
+                                        onTap: () => _showAttachment(message),
+                                        child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(kind == 'image'
+                                                  ? Icons.image
+                                                  : kind == 'video'
+                                                      ? Icons.videocam
+                                                      : kind == 'audio'
+                                                          ? Icons.mic
+                                                          : Icons.attach_file),
+                                              const SizedBox(width: 8),
+                                              Flexible(
+                                                  child: Text(
+                                                      message['fileName']
+                                                              as String? ??
+                                                          'Attachment')),
+                                            ]))
+                                    : Text(message['text'] as String? ?? ''),
                   )),
             );
           },
@@ -696,6 +690,9 @@ class _VoiceMessageState extends State<_VoiceMessage> {
         setState(() => loading = true);
         final bytes = await _ChatApi(context.read<MusicController>())
             .download(widget.mediaId);
+        if (bytes.isEmpty) {
+          throw StateError('This recording is empty or has expired.');
+        }
         final dir = await getTemporaryDirectory();
         temporaryFile = File('${dir.path}/chat-${widget.mediaId}.m4a');
         await temporaryFile!.writeAsBytes(bytes, flush: true);
@@ -706,8 +703,11 @@ class _VoiceMessageState extends State<_VoiceMessage> {
     } catch (e) {
       if (mounted) {
         setState(() => loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not play voice message: $e')));
+        final detail = e.toString();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(detail.isEmpty || detail == 'null'
+                ? 'Could not play this recording. It may have expired.'
+                : 'Could not play voice message: $detail')));
       }
     }
   }

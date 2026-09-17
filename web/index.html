@@ -31,35 +31,6 @@
 
   <title>telugu_tunes</title>
   <link rel="manifest" href="manifest.json">
-  <script>
-    // Login Kit supplies the consent screen and returns only user-approved data.
-    window.teluguSnapMount = async function (targetId, clientId, redirectURI, onAvatar, onError) {
-      try {
-        if (!window.snap || !window.snap.loginkit) {
-          await new Promise(function (resolve, reject) {
-            window.snapKitInit = resolve;
-            const script = document.createElement('script');
-            script.src = 'https://sdk.snapkit.com/js/v1/login.js';
-            script.onerror = function () { reject(new Error('Could not load Snapchat Login Kit.')); };
-            document.head.appendChild(script);
-          });
-        }
-        window.snap.loginkit.mountButton(targetId, {
-          clientId: clientId,
-          redirectURI: redirectURI,
-          scopeList: ['user.display_name', 'user.bitmoji.avatar'],
-          handleResponseCallback: function () {
-            window.snap.loginkit.fetchUserInfo().then(function (result) {
-              const url = result && result.data && result.data.me &&
-                result.data.me.bitmoji && result.data.me.bitmoji.avatar;
-              if (url) onAvatar(url);
-              else onError('Snapchat did not grant Bitmoji avatar access.');
-            }).catch(function (error) { onError(String(error)); });
-          }
-        });
-      } catch (error) { onError(String(error)); }
-    };
-  </script>
 </head>
 <body>
   <!--
