@@ -123,6 +123,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Future<void> _chooseAvatar() async {
     try {
       final controller = context.read<MusicController>();
+      final path = await Navigator.push<AvatarPath>(
+          context,
+          MaterialPageRoute(
+              builder: (_) => AvatarPathScreen(
+                    onSnapAvatar: (url) async {
+                      await _ChatApi(controller)
+                          .post('/avatar/snap', {'avatarUrl': url});
+                      await _load();
+                    },
+                  )));
+      if (path != AvatarPath.custom || !mounted) return;
       final person =
           await _ChatApi(controller).get('/avatar/me') as Map<String, dynamic>;
       if (!mounted) return;
@@ -194,6 +205,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 leading: _Avatar(
                     name: person['name'] as String? ?? '?',
                     avatarId: person['avatarId'] as String? ?? '',
+                    snapAvatarUrl: person['snapAvatarUrl'] as String? ?? '',
                     avatarStyle:
                         person['avatarStyle'] as Map<String, dynamic>?),
                 title: Text(person['name'] as String? ?? ''),
@@ -247,17 +259,25 @@ class _MessagesScreenState extends State<MessagesScreen> {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, this.avatarId = '', this.avatarStyle});
+  const _Avatar(
+      {required this.name,
+      this.avatarId = '',
+      this.snapAvatarUrl = '',
+      this.avatarStyle});
   final String name;
   final String avatarId;
+  final String snapAvatarUrl;
   final Map<String, dynamic>? avatarStyle;
   @override
   Widget build(BuildContext context) {
     final api = _ChatApi(context.read<MusicController>());
     return CircleAvatar(
-      foregroundImage: avatarId.isEmpty
-          ? null
-          : NetworkImage('${api.base}/media/$avatarId', headers: api.headers),
+      foregroundImage: snapAvatarUrl.isNotEmpty
+          ? NetworkImage(snapAvatarUrl)
+          : avatarId.isEmpty
+              ? null
+              : NetworkImage('${api.base}/media/$avatarId',
+                  headers: api.headers),
       child: AvatarFigure(style: avatarStyle, compact: true),
     );
   }
@@ -523,6 +543,7 @@ class _ConversationScreenState extends State<_ConversationScreen>
         _Avatar(
             name: widget.peer['name'] as String? ?? '?',
             avatarId: widget.peer['avatarId'] as String? ?? '',
+            snapAvatarUrl: widget.peer['snapAvatarUrl'] as String? ?? '',
             avatarStyle: widget.peer['avatarStyle'] as Map<String, dynamic>?),
         const SizedBox(width: 10),
         Expanded(child: Text(widget.peer['name'] as String? ?? 'Chat')),
@@ -866,8 +887,10 @@ class _ChatApi {
   }
 
   dynamic _decode(http.Response response) {
-    if (response.statusCode >= 200 && response.statusCode < 300)
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.body.trim().isEmpty) return null;
       return jsonDecode(response.body);
+    }
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       throw _ChatHttpException(

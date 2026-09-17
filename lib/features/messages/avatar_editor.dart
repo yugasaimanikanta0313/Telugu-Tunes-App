@@ -2,7 +2,92 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'snap_login_button.dart';
+
+enum AvatarPath { custom, snapchat }
+
+class AvatarPathScreen extends StatefulWidget {
+  const AvatarPathScreen({super.key, required this.onSnapAvatar});
+  final Future<void> Function(String) onSnapAvatar;
+
+  @override
+  State<AvatarPathScreen> createState() => _AvatarPathScreenState();
+}
+
+class _AvatarPathScreenState extends State<AvatarPathScreen> {
+  bool saving = false;
+
+  void _error(String message) {
+    if (mounted)
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _snapAvatar(String url) async {
+    setState(() => saving = true);
+    try {
+      await widget.onSnapAvatar(url);
+      if (mounted) Navigator.pop(context, AvatarPath.snapchat);
+    } catch (error) {
+      _error('$error');
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Choose your avatar')),
+        body: Center(
+            child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: ListView(padding: const EdgeInsets.all(24), children: [
+            const Icon(Icons.face_rounded, size: 84),
+            const SizedBox(height: 18),
+            Text('How would you like to appear in chats?',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 24),
+            Card(
+                child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(children: [
+                      Text('Use your Snapchat Bitmoji',
+                          style: Theme.of(context).textTheme.titleLarge),
+                      const SizedBox(height: 8),
+                      const Text(
+                          'Connect Snapchat and use the 2D avatar you approve.'),
+                      const SizedBox(height: 14),
+                      if (saving)
+                        const CircularProgressIndicator()
+                      else
+                        SnapLoginButton(onAvatar: _snapAvatar, onError: _error),
+                    ]))),
+            const SizedBox(height: 14),
+            Card(
+                child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(children: [
+                      Text('Create your own avatar',
+                          style: Theme.of(context).textTheme.titleLarge),
+                      const SizedBox(height: 8),
+                      const Text(
+                          'Choose a female, male, or neutral look and customize every detail.'),
+                      const SizedBox(height: 14),
+                      FilledButton.tonalIcon(
+                        onPressed: () =>
+                            Navigator.pop(context, AvatarPath.custom),
+                        icon: const Icon(Icons.brush_outlined),
+                        label: const Text('Create Custom Avatar'),
+                      ),
+                    ]))),
+          ]),
+        )),
+      );
+}
+
 const defaultAvatarStyle = <String, dynamic>{
+  'presentation': 'neutral',
   'skin': 'tan',
   'hair': 'short',
   'hairColor': 'black',
@@ -47,11 +132,25 @@ class AvatarEditorScreen extends StatefulWidget {
 class _AvatarEditorScreenState extends State<AvatarEditorScreen> {
   late final Map<String, dynamic> style = {
     ...defaultAvatarStyle,
-    ...?widget.initialStyle,
+    for (final entry in (widget.initialStyle ?? {}).entries)
+      if (entry.value != null) entry.key: entry.value,
   };
   bool saving = false;
 
   void _set(String key, dynamic value) => setState(() => style[key] = value);
+
+  void _presentation(String value) => setState(() {
+        style['presentation'] = value;
+        if (value == 'female') {
+          style['hair'] = 'long';
+          style['outfit'] = 'dress';
+          style['bottoms'] = 'skirt';
+        } else if (value == 'male') {
+          style['hair'] = 'short';
+          style['outfit'] = 'hoodie';
+          style['bottoms'] = 'jeans';
+        }
+      });
 
   void _pose(String pose) {
     const presets = <String, List<int>>{
@@ -126,6 +225,15 @@ class _AvatarEditorScreenState extends State<AvatarEditorScreen> {
                       borderRadius: BorderRadius.circular(28)),
                   child: AvatarFigure(style: style))),
           const SizedBox(height: 16),
+          Text('Avatar style', style: Theme.of(context).textTheme.titleMedium),
+          Wrap(spacing: 8, children: [
+            for (final value in ['female', 'male', 'neutral'])
+              ChoiceChip(
+                label: Text(value[0].toUpperCase() + value.substring(1)),
+                selected: style['presentation'] == value,
+                onSelected: (_) => _presentation(value),
+              ),
+          ]),
           _choices('Skin tone', 'skin', ['light', 'tan', 'brown', 'deep']),
           _choices('Hair', 'hair', ['short', 'curly', 'long', 'bun', 'spiky']),
           _choices('Hair color', 'hairColor',
@@ -269,10 +377,23 @@ class _AvatarPainter extends CustomPainter {
         line(shoulder, hand, top, 16);
         canvas.drawCircle(hand, 8, fill(skin));
       }
-      final torso = RRect.fromRectAndRadius(
-          const Rect.fromLTWH(49, 100, 62, 59), const Radius.circular(18));
-      canvas.drawRRect(torso, fill(top));
-      canvas.drawRRect(torso, outline);
+      if (style['presentation'] == 'female') {
+        final torso = Path()
+          ..moveTo(50, 104)
+          ..quadraticBezierTo(80, 92, 110, 104)
+          ..lineTo(101, 133)
+          ..lineTo(112, 162)
+          ..quadraticBezierTo(80, 170, 48, 162)
+          ..lineTo(59, 133)
+          ..close();
+        canvas.drawPath(torso, fill(top));
+        canvas.drawPath(torso, outline);
+      } else {
+        final torso = RRect.fromRectAndRadius(
+            const Rect.fromLTWH(49, 100, 62, 59), const Radius.circular(18));
+        canvas.drawRRect(torso, fill(top));
+        canvas.drawRRect(torso, outline);
+      }
       if (style['outfit'] == 'jacket') {
         line(const Offset(80, 104), const Offset(80, 153), Colors.white70, 3);
       } else if (style['outfit'] == 'hoodie') {
@@ -343,6 +464,10 @@ class _AvatarPainter extends CustomPainter {
     }
     final eyes = style['eyes'] as String? ?? 'round';
     for (final x in [65.0, 95.0]) {
+      if (style['presentation'] == 'female') {
+        line(Offset(x - 6, 65), Offset(x - 10, 61), const Color(0xFF342534), 2);
+        line(Offset(x + 6, 65), Offset(x + 10, 61), const Color(0xFF342534), 2);
+      }
       if (eyes == 'wink' && x == 95.0 || eyes == 'sleepy') {
         line(
             Offset(x - 5, 70), Offset(x + 5, 70), const Color(0xFF342534), 2.5);

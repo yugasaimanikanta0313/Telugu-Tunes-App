@@ -5,4 +5,4 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document("chat_avatars")
 public record ChatAvatarDocument(@Id String memberId, String mediaId,
-    String emoji, AvatarStyle style) {}
+    String emoji, AvatarStyle style, String snapAvatarUrl) {}
