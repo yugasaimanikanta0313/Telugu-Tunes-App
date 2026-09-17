@@ -68,7 +68,3 @@ android {
 flutter {
     source = "../.."
 }
-
-dependencies {
-    implementation("com.snap.loginkit:loginkit:2.1.1")
-}
