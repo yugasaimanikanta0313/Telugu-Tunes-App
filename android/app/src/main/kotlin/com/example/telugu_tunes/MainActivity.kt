@@ -89,5 +89,3 @@ class MainActivity : AudioServiceActivity() {
         manager.notify(id, notification)
     }
 }
-
-\n

@@ -399,10 +399,19 @@ class _AvatarEditorScreenState extends State<AvatarEditorScreen> {
                             children: [
                               SizedBox(
                                 height: 75,
-                                child: AvatarFigure(style: {
-                                  ...style,
-                                  ..._costumeStyles[name]!,
-                                }, compact: false),
+                                child: Icon(
+                                  _collections['Formal']!.contains(name)
+                                      ? Icons.checkroom_rounded
+                                      : _collections['Halloween']!
+                                              .contains(name)
+                                          ? Icons.nights_stay_rounded
+                                          : _collections['Casual']!
+                                                  .contains(name)
+                                              ? Icons.person_rounded
+                                              : Icons.shield_rounded,
+                                  size: 42,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
                               ),
                               Text(_costumeNames[name]!,
                                   textAlign: TextAlign.center,
