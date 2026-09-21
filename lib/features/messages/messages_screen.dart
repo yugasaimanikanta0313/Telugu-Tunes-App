@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:audioplayers/audioplayers.dart' as voice_audio;
 import 'package:model_viewer_plus/model_viewer_plus.dart';
 import 'package:open_file/open_file.dart';
@@ -108,8 +109,22 @@ class _MessagesScreenState extends State<MessagesScreen> {
     final file = picked.files.first;
     if (file.bytes == null) return;
     try {
+      final temp = await getTemporaryDirectory();
+      final source = File(
+          '${temp.path}/profile-source-${DateTime.now().microsecondsSinceEpoch}.${file.extension ?? 'jpg'}');
+      await source.writeAsBytes(file.bytes!, flush: true);
+      final cropped = await ImageCropper().cropImage(
+          sourcePath: source.path,
+          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+          compressQuality: 92,
+          uiSettings: [
+            AndroidUiSettings(
+                toolbarTitle: 'Crop profile photo', lockAspectRatio: true)
+          ]);
+      source.delete().ignore();
+      if (cropped == null || !mounted) return;
       await _ChatApi(context.read<MusicController>())
-          .uploadAvatar(file.name, file.bytes!);
+          .uploadAvatar('profile.jpg', await cropped.readAsBytes());
       await _load();
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
@@ -132,6 +147,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ? (jsonDecode(catalogResponse.body) as List)
               .cast<Map<String, dynamic>>()
           : <Map<String, dynamic>>[];
+      final hiddenResponse = await http.get(Uri.parse(
+          '${controller.apiBaseUrl}/avatar-catalog/public/hidden-bundled'));
+      final hiddenBundled = hiddenResponse.statusCode == 200
+          ? (jsonDecode(hiddenResponse.body) as List)
+              .map((value) => value.toString())
+              .toSet()
+          : <String>{};
       if (!mounted) return;
       await Navigator.push<void>(
           context,
@@ -143,6 +165,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               initialDateOfBirth: person['dateOfBirth']?.toString(),
               initialCity: person['city']?.toString() ?? '',
               managedAvatars: managedAvatars,
+              hiddenBundled: hiddenBundled,
               apiBaseUrl: controller.apiBaseUrl,
               onSaveDetails: (dateOfBirth, city) => _ChatApi(controller).post(
                   '/avatar/details',

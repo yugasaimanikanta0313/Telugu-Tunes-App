@@ -16,6 +16,7 @@ import com.telugutunes.api.repository.FriendshipRepository;
 import com.telugutunes.api.repository.MemberRepository;
 import com.telugutunes.api.repository.MemberDetailsRepository;
 import com.telugutunes.api.repository.AvatarCatalogRepository;
+import com.telugutunes.api.repository.HiddenBundledAvatarRepository;
 import com.telugutunes.api.service.MemberActivityService;
 import java.io.IOException;
 import java.time.Instant;
@@ -55,11 +56,13 @@ public class MessagesController {
   private final MemberActivityService activity;
   private final MemberDetailsRepository details;
   private final AvatarCatalogRepository avatarCatalog;
+  private final HiddenBundledAvatarRepository hiddenBundledAvatars;
 
   public MessagesController(MemberRepository members, FriendshipRepository friendships,
       ChatMessageRepository messages, ChatAvatarRepository avatars,
       ChatReadRepository reads, GridFsTemplate files, MemberActivityService activity,
-      MemberDetailsRepository details, AvatarCatalogRepository avatarCatalog) {
+      MemberDetailsRepository details, AvatarCatalogRepository avatarCatalog,
+      HiddenBundledAvatarRepository hiddenBundledAvatars) {
     this.members = members;
     this.friendships = friendships;
     this.messages = messages;
@@ -69,6 +72,7 @@ public class MessagesController {
     this.activity = activity;
     this.details = details;
     this.avatarCatalog = avatarCatalog;
+    this.hiddenBundledAvatars = hiddenBundledAvatars;
   }
 
   public record Person(String id, String name, String email, String avatarId,
@@ -199,7 +203,8 @@ public class MessagesController {
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String self,
       @RequestBody HeroPresetChoice choice) {
     boolean bundled = choice != null && List.of("spiderman", "ironman", "batman", "hulk",
-        "doraemon", "wonderwoman", "pikachu", "superman").contains(choice.presetId());
+        "doraemon", "wonderwoman", "pikachu", "superman").contains(choice.presetId())
+        && !hiddenBundledAvatars.existsById(choice.presetId());
     boolean managed = choice != null && avatarCatalog.findById(choice.presetId())
         .filter(value -> value.active()).isPresent();
     if (!bundled && !managed)

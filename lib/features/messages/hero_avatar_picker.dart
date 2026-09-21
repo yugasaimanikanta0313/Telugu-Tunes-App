@@ -29,6 +29,7 @@ class HeroAvatarPicker extends StatefulWidget {
       this.initialDateOfBirth,
       this.initialCity = '',
       this.managedAvatars = const [],
+      this.hiddenBundled = const {},
       required this.apiBaseUrl,
       required this.onSave,
       required this.onSaveDetails,
@@ -39,6 +40,7 @@ class HeroAvatarPicker extends StatefulWidget {
   final String? initialDateOfBirth;
   final String initialCity;
   final List<Map<String, dynamic>> managedAvatars;
+  final Set<String> hiddenBundled;
   final String apiBaseUrl;
   final Future<void> Function(String) onSave;
   final Future<void> Function(String, String) onSaveDetails;
@@ -93,14 +95,22 @@ class _HeroAvatarPickerState extends State<HeroAvatarPicker> {
     final managed = {
       for (final value in widget.managedAvatars) value['id'].toString(): value
     };
-    if (!heroAvatarNames.containsKey(selected) &&
-        !managed.containsKey(selected)) selected = 'ironman';
+    final visibleBundled = heroAvatarNames.keys
+        .where((id) => !widget.hiddenBundled.contains(id))
+        .toList();
+    if (widget.hiddenBundled.contains(selected) ||
+        (!heroAvatarNames.containsKey(selected) &&
+            !managed.containsKey(selected))) {
+      selected = visibleBundled.isNotEmpty
+          ? visibleBundled.first
+          : (managed.isNotEmpty ? managed.keys.first : selected);
+    }
     final name = heroAvatarNames[selected] ??
         managed[selected]?['name']?.toString() ??
         'Avatar';
     final model = heroAvatarModel(selected) ??
         '${widget.apiBaseUrl}/avatar-catalog/public/$selected/model';
-    final ids = [...heroAvatarNames.keys, ...managed.keys];
+    final ids = [...visibleBundled, ...managed.keys];
     return Scaffold(
       appBar: AppBar(title: const Text('Choose your 3D avatar'), actions: [
         TextButton(onPressed: saving ? null : _save, child: const Text('Save')),

@@ -68,3 +68,9 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // uCrop can load local and remote sources; its Android library keeps the
+    // OkHttp types optional, so release minification needs the concrete client.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+}
