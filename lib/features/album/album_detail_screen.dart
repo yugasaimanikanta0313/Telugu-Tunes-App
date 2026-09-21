@@ -113,8 +113,18 @@ class AlbumDetailScreen extends StatelessWidget {
                           icon: const Icon(Icons.library_add_rounded),
                         ),
                       IconButton.filledTonal(
-                          onPressed: () =>
-                              context.read<MusicController>().toggleShuffle(),
+                          onPressed: album.tracks.isEmpty
+                              ? null
+                              : () {
+                                  final controller =
+                                      context.read<MusicController>();
+                                  if (!controller.shuffleEnabled)
+                                    controller.toggleShuffle();
+                                  final shuffled = [...album.tracks]..shuffle();
+                                  controller.play(shuffled.first,
+                                      sequence: shuffled,
+                                      sourceLabel: 'Album • ${album.title}');
+                                },
                           tooltip: 'Shuffle',
                           icon: const Icon(Icons.shuffle_rounded)),
                       IconButton.filledTonal(

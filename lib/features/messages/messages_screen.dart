@@ -126,12 +126,27 @@ class _MessagesScreenState extends State<MessagesScreen> {
       final controller = context.read<MusicController>();
       final person =
           await _ChatApi(controller).get('/avatar/me') as Map<String, dynamic>;
+      final catalogResponse = await http
+          .get(Uri.parse('${controller.apiBaseUrl}/avatar-catalog/public'));
+      final managedAvatars = catalogResponse.statusCode == 200
+          ? (jsonDecode(catalogResponse.body) as List)
+              .cast<Map<String, dynamic>>()
+          : <Map<String, dynamic>>[];
       if (!mounted) return;
       await Navigator.push<void>(
           context,
           MaterialPageRoute(
             builder: (_) => HeroAvatarPicker(
               initialPreset: person['heroPreset'] as String?,
+              name: person['name']?.toString() ?? '',
+              email: person['email']?.toString() ?? '',
+              initialDateOfBirth: person['dateOfBirth']?.toString(),
+              initialCity: person['city']?.toString() ?? '',
+              managedAvatars: managedAvatars,
+              apiBaseUrl: controller.apiBaseUrl,
+              onSaveDetails: (dateOfBirth, city) => _ChatApi(controller).post(
+                  '/avatar/details',
+                  {'dateOfBirth': dateOfBirth, 'city': city}),
               onSave: (presetId) async {
                 await _ChatApi(controller)
                     .post('/avatar/preset', {'presetId': presetId});
@@ -302,11 +317,17 @@ class _ConversationScreenState extends State<_ConversationScreen>
     with WidgetsBindingObserver {
   static const _privacy = MethodChannel('telugu_tunes/chat_privacy');
   final input = TextEditingController();
+  final inputFocus = FocusNode();
   final recorder = AudioRecorder();
   List<dynamic> messages = [];
   Timer? refresh;
   bool sending = false;
   bool recording = false;
+  bool recordingPaused = false;
+  bool hasText = false;
+  Duration recordedFor = Duration.zero;
+  Timer? recordingTimer;
+  Map<String, dynamic>? replyingTo;
   String? error;
   late Map<String, dynamic> peer = Map<String, dynamic>.from(widget.peer);
 
@@ -316,6 +337,10 @@ class _ConversationScreenState extends State<_ConversationScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    input.addListener(() {
+      final value = input.text.trim().isNotEmpty;
+      if (mounted && value != hasText) setState(() => hasText = value);
+    });
     _setSecure(true);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     refresh =
@@ -339,7 +364,9 @@ class _ConversationScreenState extends State<_ConversationScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     refresh?.cancel();
+    recordingTimer?.cancel();
     input.dispose();
+    inputFocus.dispose();
     recorder.dispose();
     _setSecure(false);
     super.dispose();
@@ -394,9 +421,13 @@ class _ConversationScreenState extends State<_ConversationScreen>
       'text': text.trim(),
       'mediaId': mediaId,
       'fileName': fileName,
+      'replyToId': replyingTo?['id']?.toString() ?? '',
     };
     input.clear();
-    setState(() => sending = true);
+    setState(() {
+      sending = true;
+      replyingTo = null;
+    });
     try {
       await api.post('/$peerId', payload);
       await _load();
@@ -443,7 +474,12 @@ class _ConversationScreenState extends State<_ConversationScreen>
     try {
       if (recording) {
         final path = await recorder.stop();
-        if (mounted) setState(() => recording = false);
+        recordingTimer?.cancel();
+        if (mounted)
+          setState(() {
+            recording = false;
+            recordingPaused = false;
+          });
         if (path == null || path.isEmpty) {
           throw StateError('Recording was not saved. Please try again.');
         }
@@ -461,13 +497,81 @@ class _ConversationScreenState extends State<_ConversationScreen>
             '${dir.path}/voice-${DateTime.now().millisecondsSinceEpoch}.m4a';
         await recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc),
             path: path);
-        if (mounted) setState(() => recording = true);
+        if (mounted)
+          setState(() {
+            recording = true;
+            recordingPaused = false;
+            recordedFor = Duration.zero;
+          });
+        recordingTimer?.cancel();
+        recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (mounted && recording && !recordingPaused) {
+            setState(() => recordedFor += const Duration(seconds: 1));
+          }
+        });
       }
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('$e')));
     }
+  }
+
+  Future<void> _pauseResumeRecording() async {
+    if (!recording) return;
+    if (recordingPaused) {
+      await recorder.resume();
+    } else {
+      await recorder.pause();
+    }
+    if (mounted) setState(() => recordingPaused = !recordingPaused);
+  }
+
+  Future<void> _discardRecording() async {
+    recordingTimer?.cancel();
+    final path = await recorder.stop();
+    if (path != null) File(path).delete().ignore();
+    if (mounted)
+      setState(() {
+        recording = false;
+        recordingPaused = false;
+        recordedFor = Duration.zero;
+      });
+  }
+
+  Future<void> _react(Map<String, dynamic> message, String emoji) async {
+    await _ChatApi(context.read<MusicController>())
+        .post('/$peerId/${message['id']}/reaction', {'emoji': emoji});
+    await _load(silent: true);
+  }
+
+  void _messageActions(Map<String, dynamic> message) {
+    const reactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+    showModalBottomSheet<void>(
+        context: context,
+        builder: (sheet) => SafeArea(
+            child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Wrap(spacing: 14, children: [
+                    for (final emoji in reactions)
+                      InkWell(
+                          onTap: () {
+                            Navigator.pop(sheet);
+                            _react(message, emoji);
+                          },
+                          child:
+                              Text(emoji, style: const TextStyle(fontSize: 32)))
+                  ]),
+                  ListTile(
+                      leading: const Icon(Icons.reply),
+                      title: const Text('Reply'),
+                      onTap: () {
+                        Navigator.pop(sheet);
+                        setState(() => replyingTo = message);
+                        inputFocus.requestFocus();
+                      })
+                ]))));
   }
 
   Future<void> _sendAttachment(
@@ -578,46 +682,94 @@ class _ConversationScreenState extends State<_ConversationScreen>
             final mine = message['senderId'] == controller.memberId;
             final kind = message['kind'] as String? ?? 'text';
             final mediaId = message['mediaId']?.toString().trim() ?? '';
+            final reactions =
+                (message['reactions'] as Map?)?.values.toList() ?? const [];
             return Align(
               alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-              child: Card(
-                  color: mine
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : null,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    child: kind == 'audio' && mediaId.isNotEmpty
-                        ? _VoiceMessage(
-                            mediaId: mediaId,
-                            fileName: message['fileName']?.toString() ?? '')
-                        : kind == 'audio'
-                            ? const Text('Voice message unavailable')
-                            : kind == 'sticker'
-                                ? Text(message['text'] as String? ?? '',
-                                    style: const TextStyle(fontSize: 42))
-                                : mediaId.isNotEmpty
-                                    ? InkWell(
-                                        onTap: () => _showAttachment(message),
-                                        child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(kind == 'image'
-                                                  ? Icons.image
-                                                  : kind == 'video'
-                                                      ? Icons.videocam
-                                                      : kind == 'audio'
-                                                          ? Icons.mic
-                                                          : Icons.attach_file),
-                                              const SizedBox(width: 8),
-                                              Flexible(
-                                                  child: Text(
-                                                      message['fileName']
-                                                              as String? ??
-                                                          'Attachment')),
-                                            ]))
-                                    : Text(message['text'] as String? ?? ''),
-                  )),
+              child: GestureDetector(
+                  onLongPress: () => _messageActions(message),
+                  child: Card(
+                      color: mine
+                          ? Theme.of(context).colorScheme.primaryContainer
+                          : null,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if ((message['replyText']?.toString() ?? '')
+                                  .isNotEmpty)
+                                Container(
+                                    padding: const EdgeInsets.all(7),
+                                    margin: const EdgeInsets.only(bottom: 6),
+                                    decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .surface
+                                            .withValues(alpha: .55),
+                                        borderRadius: BorderRadius.circular(7)),
+                                    child: Text(message['replyText'].toString(),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis)),
+                              kind == 'audio' && mediaId.isNotEmpty
+                                  ? _VoiceMessage(
+                                      mediaId: mediaId,
+                                      fileName:
+                                          message['fileName']?.toString() ?? '')
+                                  : kind == 'audio'
+                                      ? const Text('Voice message unavailable')
+                                      : kind == 'sticker'
+                                          ? Text(
+                                              message['text'] as String? ?? '',
+                                              style:
+                                                  const TextStyle(fontSize: 42))
+                                          : mediaId.isNotEmpty
+                                              ? InkWell(
+                                                  onTap: () =>
+                                                      _showAttachment(message),
+                                                  child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Icon(kind == 'image'
+                                                            ? Icons.image
+                                                            : kind == 'video'
+                                                                ? Icons.videocam
+                                                                : kind ==
+                                                                        'audio'
+                                                                    ? Icons.mic
+                                                                    : Icons
+                                                                        .attach_file),
+                                                        const SizedBox(
+                                                            width: 8),
+                                                        Flexible(
+                                                            child: Text(message[
+                                                                        'fileName']
+                                                                    as String? ??
+                                                                'Attachment')),
+                                                      ]))
+                                              : Text(
+                                                  message['text'] as String? ??
+                                                      ''),
+                              if (reactions.isNotEmpty)
+                                Padding(
+                                    padding: const EdgeInsets.only(top: 5),
+                                    child: Text(reactions.join(' '))),
+                              if (mine)
+                                Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Icon(
+                                        message['seenAt'] == null
+                                            ? Icons.done
+                                            : Icons.done_all,
+                                        size: 16,
+                                        color: message['seenAt'] == null
+                                            ? null
+                                            : Colors.lightBlueAccent))
+                            ]),
+                      ))),
             );
           },
         )),
@@ -625,34 +777,67 @@ class _ConversationScreenState extends State<_ConversationScreen>
             top: false,
             child: Padding(
                 padding: const EdgeInsets.all(8),
-                child: Row(children: [
-                  IconButton(
-                      onPressed: sending ? null : _attach,
-                      tooltip: 'Attach file',
-                      icon: const Icon(Icons.add_circle_outline)),
-                  IconButton(
-                      onPressed: _pickSticker,
-                      tooltip: 'Stickers and emoji',
-                      icon: const Icon(Icons.emoji_emotions_outlined)),
-                  IconButton(
-                      onPressed: sending ? null : _toggleRecording,
-                      tooltip: recording
-                          ? 'Stop and send recording'
-                          : 'Record voice message',
-                      icon:
-                          Icon(recording ? Icons.stop_circle : Icons.mic_none)),
-                  Expanded(
-                      child: TextField(
-                          controller: input,
-                          minLines: 1,
-                          maxLines: 4,
-                          decoration: const InputDecoration(
-                              hintText: 'Message your friend'))),
-                  IconButton(
-                      onPressed:
-                          sending ? null : () => _send('text', input.text),
-                      tooltip: 'Send',
-                      icon: const Icon(Icons.send_rounded)),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  if (replyingTo != null)
+                    ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.reply),
+                        title: Text(
+                            replyingTo?['text']?.toString() ?? 'Attachment',
+                            maxLines: 1),
+                        trailing: IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () =>
+                                setState(() => replyingTo = null))),
+                  if (recording)
+                    Row(children: [
+                      IconButton(
+                          onPressed: _discardRecording,
+                          icon: const Icon(Icons.delete_outline)),
+                      Expanded(
+                          child: Text(
+                              '${recordedFor.inMinutes}:${recordedFor.inSeconds.remainder(60).toString().padLeft(2, '0')}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold))),
+                      IconButton(
+                          onPressed: _pauseResumeRecording,
+                          icon: Icon(recordingPaused
+                              ? Icons.play_arrow
+                              : Icons.pause)),
+                      IconButton(
+                          onPressed: sending ? null : _toggleRecording,
+                          icon: const Icon(Icons.send_rounded)),
+                    ])
+                  else
+                    Row(children: [
+                      if (!hasText)
+                        IconButton(
+                            onPressed: sending ? null : _attach,
+                            tooltip: 'Attach file',
+                            icon: const Icon(Icons.add_circle_outline)),
+                      if (!hasText)
+                        IconButton(
+                            onPressed: _pickSticker,
+                            tooltip: 'Stickers and emoji',
+                            icon: const Icon(Icons.emoji_emotions_outlined)),
+                      Expanded(
+                          child: TextField(
+                              controller: input,
+                              focusNode: inputFocus,
+                              minLines: 1,
+                              maxLines: 4,
+                              decoration: const InputDecoration(
+                                  hintText: 'Message your friend'))),
+                      IconButton(
+                          onPressed: sending
+                              ? null
+                              : (hasText
+                                  ? () => _send('text', input.text)
+                                  : _toggleRecording),
+                          tooltip: hasText ? 'Send' : 'Record voice message',
+                          icon: Icon(
+                              hasText ? Icons.send_rounded : Icons.mic_none)),
+                    ])
                 ]))),
       ]),
     );
@@ -718,11 +903,7 @@ class _VoiceMessageState extends State<_VoiceMessage> {
       if (!prepared) {
         setState(() => loading = true);
         final api = _ChatApi(context.read<MusicController>());
-        try {
-          await player.setAudioSource(AudioSource.uri(
-              Uri.parse('${api.base}/media/${widget.mediaId}'),
-              headers: api.headers));
-        } on PlatformException {
+        {
           final bytes = await api.download(widget.mediaId);
           if (bytes.isEmpty) {
             throw StateError('This recording is empty or has expired.');

@@ -354,8 +354,10 @@ class AudioPlaybackService {
     return true;
   }
 
-  Future<void> setShuffle(bool enabled) =>
-      _player.setShuffleModeEnabled(enabled);
+  Future<void> setShuffle(bool enabled) async {
+    if (enabled) await _player.shuffle();
+    await _player.setShuffleModeEnabled(enabled);
+  }
 
   Future<void> setRepeat(bool enabled) =>
       _player.setLoopMode(enabled ? LoopMode.one : LoopMode.off);

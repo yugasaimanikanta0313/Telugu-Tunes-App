@@ -17,4 +17,6 @@ public interface ChatMessageRepository extends MongoRepository<ChatMessageDocume
   Optional<ChatMessageDocument> findByConversationIdAndSenderIdAndClientId(
       String conversationId, String senderId, String clientId);
   List<ChatMessageDocument> findByMediaId(String mediaId);
+  List<ChatMessageDocument> findByConversationIdAndSenderIdAndSeenAtIsNull(
+      String conversationId, String senderId);
 }

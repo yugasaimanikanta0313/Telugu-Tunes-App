@@ -95,6 +95,7 @@ abstract class MusicRepository {
   Future<ListeningRoom> joinRoom(String inviteCode);
   Future<ListeningRoom> joinPublicRoom(String roomId);
   Future<void> leaveRoom(String roomId);
+  Future<void> deletePublicRoom(String roomId);
   Future<ListeningRoom> setRoomTrack(String roomId, String trackId);
   Future<ListeningRoom> updateRoomPlayback(
     String roomId,
@@ -310,6 +311,8 @@ class SpringBootMusicRepository implements MusicRepository {
       _api.joinPublicRoom(roomId);
   @override
   Future<void> leaveRoom(String roomId) => _api.leaveRoom(roomId);
+  @override
+  Future<void> deletePublicRoom(String roomId) => _api.deletePublicRoom(roomId);
   @override
   Future<ListeningRoom> setRoomTrack(String roomId, String trackId) =>
       _api.setRoomTrack(roomId, trackId);
@@ -829,6 +832,8 @@ class MockMusicRepository implements MusicRepository {
 
   @override
   Future<void> leaveRoom(String roomId) async {}
+  @override
+  Future<void> deletePublicRoom(String roomId) async {}
 
   @override
   Future<ListeningRoom> setRoomTrack(String roomId, String trackId) async =>

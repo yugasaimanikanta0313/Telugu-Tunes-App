@@ -9,6 +9,7 @@ import '../auth/sign_in_screen.dart';
 import '../admin/member_management_screen.dart';
 import '../admin/recommended_playlists_screen.dart';
 import '../admin/recommendation_votes_screen.dart';
+import '../admin/avatar_management_screen.dart';
 import '../import/import_music_sheet.dart';
 import '../shared/widgets.dart';
 
@@ -63,6 +64,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SectionTitle(title: 'Administration'),
           Card(
             child: Column(children: [
+              ListTile(
+                leading: const Icon(Icons.view_in_ar_outlined),
+                title: const Text('Manage 3D avatars'),
+                subtitle: const Text(
+                    'Upload or remove GLB avatars without redeploying'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const AvatarManagementScreen())),
+              ),
+              const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.manage_accounts_outlined),
                 title: const Text('Manage member accounts'),

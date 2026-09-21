@@ -26,6 +26,7 @@ public class AuthenticationFilter extends OncePerRequestFilter {
     var publicCatalogRead =
         "GET".equalsIgnoreCase(request.getMethod())
             && (path.startsWith("/api/v1/home")
+                || path.startsWith("/api/v1/avatar-catalog/public")
                 || path.startsWith("/api/v1/albums")
                 || path.equals("/api/v1/recommended-playlists")
                 || path.equals("/api/v1/recommended-playlists/festival")

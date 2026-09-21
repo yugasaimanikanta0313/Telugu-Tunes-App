@@ -566,10 +566,23 @@ class _RoomLobby extends StatelessWidget {
                       subtitle: Text(track == null
                           ? '${room.listeners} members • No song selected'
                           : '${room.listeners} members • Playing ${track.title}'),
-                      trailing: FilledButton(
-                        onPressed: () => _joinPublicRoom(context, room),
-                        child: const Text('Join'),
-                      ),
+                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        if (controller.isAdmin)
+                          IconButton(
+                              tooltip: 'Delete public room',
+                              onPressed: () async {
+                                await controller.deletePublicRoom(room.id);
+                                if (context.mounted)
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content:
+                                              Text('Public room deleted.')));
+                              },
+                              icon: const Icon(Icons.delete_outline)),
+                        FilledButton(
+                            onPressed: () => _joinPublicRoom(context, room),
+                            child: const Text('Join')),
+                      ]),
                     ),
                   ),
                 );

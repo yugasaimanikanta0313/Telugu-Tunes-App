@@ -109,6 +109,7 @@ abstract class MusicApiService {
   Future<ListeningRoom> joinRoom(String inviteCode);
   Future<ListeningRoom> joinPublicRoom(String roomId);
   Future<void> leaveRoom(String roomId);
+  Future<void> deletePublicRoom(String roomId);
   Future<ListeningRoom> setRoomTrack(String roomId, String trackId);
   Future<ListeningRoom> updateRoomPlayback(
     String roomId,
@@ -805,6 +806,16 @@ class SpringBootMusicApiService implements MusicApiService {
       Uri.parse(config.baseUrl + '/rooms/$roomId/leave'),
       headers: _headers,
     );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(_errorMessage(response));
+    }
+  }
+
+  @override
+  Future<void> deletePublicRoom(String roomId) async {
+    final response = await _client.delete(
+        Uri.parse('${config.baseUrl}/rooms/public/$roomId'),
+        headers: _headers);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(_errorMessage(response));
     }

@@ -85,6 +85,12 @@ public class RoomService {
     return response(rooms.save(withMembers(room, members, Instant.now())));
   }
 
+  public void deletePublic(String roomId) {
+    var room = rooms.findById(roomId).orElseThrow(() -> new NotFoundException("Room not found."));
+    if (!isPublic(room)) throw new IllegalArgumentException("Only public rooms can be deleted here.");
+    rooms.delete(room);
+  }
+
   /** A host closes their room for all listeners; a guest simply leaves it. */
   public void leave(String memberId, String roomId) {
     var room = rooms.findById(roomId).orElseThrow(() -> new NotFoundException("Room not found."));

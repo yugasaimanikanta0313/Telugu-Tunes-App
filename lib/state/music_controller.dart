@@ -358,7 +358,7 @@ class MusicController extends ChangeNotifier {
       _loopPlaybackSequence = loopSequence;
       _stopAtSequenceEnd = stopAtSequenceEnd;
       _playbackSourceLabel = sourceLabel;
-    } else {
+    } else if (!_playbackSequence.any((item) => item.id == track.id)) {
       _playbackSequence = const [];
       _loopPlaybackSequence = false;
       _stopAtSequenceEnd = false;
@@ -478,7 +478,7 @@ class MusicController extends ChangeNotifier {
 
   Future<void> _playNextCatalogTrack() async {
     final finished = current;
-    if (finished == null || allTracks.isEmpty) return;
+    if (finished == null) return;
     final sequenceIndex =
         _playbackSequence.indexWhere((track) => track.id == finished.id);
     if (_loopPlaybackSequence) {
@@ -506,6 +506,7 @@ class MusicController extends ChangeNotifier {
         return;
       }
     }
+    if (allTracks.isEmpty) return;
     final index = allTracks.indexWhere((track) => track.id == finished.id);
     final nextIndex = index < 0 ? 0 : (index + 1) % allTracks.length;
     await _playTrack(allTracks[nextIndex]);
@@ -517,6 +518,13 @@ class MusicController extends ChangeNotifier {
   }
 
   Future<void> skipPrevious() async {
+    if (room == null && _playbackSequence.isNotEmpty) {
+      final index = _playbackSequence.indexWhere((t) => t.id == current?.id);
+      final previous =
+          (index - 1 + _playbackSequence.length) % _playbackSequence.length;
+      await _playTrack(_playbackSequence[previous]);
+      return;
+    }
     if (allTracks.isEmpty) return;
     if (room == null && _audio.isAvailable && await _audio.skipPrevious()) {
       return;
@@ -659,6 +667,12 @@ class MusicController extends ChangeNotifier {
     _configureRoomPolling();
     notifyListeners();
     if (room != null) await _synchronizeToRoom(room!);
+  }
+
+  Future<void> deletePublicRoom(String roomId) async {
+    await _repository.deletePublicRoom(roomId);
+    publicRooms = publicRooms.where((room) => room.id != roomId).toList();
+    notifyListeners();
   }
 
   Future<void> leaveRoom() async {
@@ -1174,6 +1188,14 @@ class MusicController extends ChangeNotifier {
     _playbackSequence = _playbackSequence
         .where((item) => item.id != track.id)
         .toList(growable: false);
+    notifyListeners();
+  }
+
+  void addToPlaybackQueue(Track track) {
+    final seed = _playbackSequence.isEmpty
+        ? <Track>[if (current != null) current!]
+        : _playbackSequence;
+    _playbackSequence = _uniqueTracks([...seed, track]);
     notifyListeners();
   }
 

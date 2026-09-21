@@ -5,6 +5,7 @@ import com.telugutunes.api.api.dto.CreateRoomRequest;
 import com.telugutunes.api.api.dto.JoinRoomRequest;
 import com.telugutunes.api.api.dto.UpdateRoomPlaybackRequest;
 import com.telugutunes.api.service.RoomService;
+import com.telugutunes.api.service.AuthService;
 import com.telugutunes.api.config.AuthenticationFilter;
 import com.telugutunes.api.realtime.RoomWebSocketHandler;
 import jakarta.validation.Valid;
@@ -19,16 +20,29 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.DeleteMapping;
 
 @RestController
 @RequestMapping("/api/v1/rooms")
 public class RoomsController {
   private final RoomService rooms;
   private final RoomWebSocketHandler realtime;
+  private final AuthService auth;
 
-  public RoomsController(RoomService rooms, RoomWebSocketHandler realtime) {
+  public RoomsController(RoomService rooms, RoomWebSocketHandler realtime, AuthService auth) {
     this.rooms = rooms;
     this.realtime = realtime;
+    this.auth = auth;
+  }
+
+  @DeleteMapping("/public/{roomId}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void deletePublicRoom(
+      @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String memberId,
+      @PathVariable String roomId) {
+    auth.requireAdministrator(memberId);
+    rooms.deletePublic(roomId);
+    realtime.broadcastRoomChanged(roomId);
   }
 
   @GetMapping
