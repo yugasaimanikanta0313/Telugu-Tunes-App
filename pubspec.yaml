@@ -16,6 +16,7 @@ dependencies:
   file_picker: ^11.0.3
   shared_preferences: ^2.5.5
   just_audio: ^0.10.6
+  audioplayers: ^6.5.1
   just_audio_background: ^0.0.1-beta.17
   audio_service: ^0.18.18
   path_provider: ^2.1.5

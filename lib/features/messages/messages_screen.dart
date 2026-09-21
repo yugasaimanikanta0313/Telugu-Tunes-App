@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:audioplayers/audioplayers.dart' as voice_audio;
 import 'package:model_viewer_plus/model_viewer_plus.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
@@ -879,7 +879,7 @@ class _VoiceMessage extends StatefulWidget {
 }
 
 class _VoiceMessageState extends State<_VoiceMessage> {
-  final AudioPlayer player = AudioPlayer();
+  final voice_audio.AudioPlayer player = voice_audio.AudioPlayer();
   File? temporaryFile;
   bool loading = false;
   bool prepared = false;
@@ -893,13 +893,16 @@ class _VoiceMessageState extends State<_VoiceMessage> {
 
   Future<void> _toggle() async {
     try {
-      if (player.playing) {
+      if (player.state == voice_audio.PlayerState.playing) {
         await player.pause();
         return;
       }
-      if (player.processingState == ProcessingState.completed) {
-        await player.seek(Duration.zero);
+      if (prepared && player.state == voice_audio.PlayerState.paused) {
+        await player.resume();
+        return;
       }
+      if (player.state == voice_audio.PlayerState.completed)
+        await player.seek(Duration.zero);
       if (!prepared) {
         setState(() => loading = true);
         final api = _ChatApi(context.read<MusicController>());
@@ -912,25 +915,23 @@ class _VoiceMessageState extends State<_VoiceMessage> {
           final extension = _audioExtension(bytes, widget.fileName);
           temporaryFile = File('${dir.path}/chat-${widget.mediaId}$extension');
           await temporaryFile!.writeAsBytes(bytes, flush: true);
-          await player.setFilePath(temporaryFile!.path);
         }
         prepared = true;
       }
       if (mounted) setState(() => loading = false);
-      await player.play();
+      await player.play(voice_audio.DeviceFileSource(temporaryFile!.path));
     } catch (e) {
       if (mounted) {
         setState(() => loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text(
-                'Could not play this voice message. Please ask the sender to record it again.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Voice playback failed: ${e.toString()}')));
       }
     }
   }
 
   @override
-  Widget build(BuildContext context) => StreamBuilder<PlayerState>(
-      stream: player.playerStateStream,
+  Widget build(BuildContext context) => StreamBuilder<voice_audio.PlayerState>(
+      stream: player.onPlayerStateChanged,
       builder: (context, snapshot) => Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -941,7 +942,7 @@ class _VoiceMessageState extends State<_VoiceMessage> {
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2))
-                      : Icon(player.playing
+                      : Icon(player.state == voice_audio.PlayerState.playing
                           ? Icons.pause_circle
                           : Icons.play_circle)),
               const Text('Voice message'),
