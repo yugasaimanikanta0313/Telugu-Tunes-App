@@ -107,7 +107,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(flushChatQueue(context.read<MusicController>()));
+      if (mounted) {
+        final controller = context.read<MusicController>();
+        unawaited(flushChatQueue(controller));
+        if (controller.isAuthenticated) {
+          unawaited(requestChatAlertPermission(controller));
+        }
+      }
     });
   }
 

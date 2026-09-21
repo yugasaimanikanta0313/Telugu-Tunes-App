@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:model_viewer_plus/model_viewer_plus.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -16,7 +17,6 @@ import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../state/music_controller.dart';
-import 'avatar_editor.dart';
 import 'hero_avatar_picker.dart';
 
 class MessagesScreen extends StatefulWidget {
@@ -132,14 +132,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
           MaterialPageRoute(
             builder: (_) => HeroAvatarPicker(
               initialPreset: person['heroPreset'] as String?,
-              initialStyle: person['avatarStyle'] as Map<String, dynamic>?,
               onSave: (presetId) async {
                 await _ChatApi(controller)
                     .post('/avatar/preset', {'presetId': presetId});
-                await _load();
-              },
-              onSaveCustom: (style) async {
-                await _ChatApi(controller).post('/avatar/style', style);
                 await _load();
               },
               onCustomPhoto: () {
@@ -148,6 +143,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               },
             ),
           ));
+      await _load();
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
@@ -201,9 +197,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 leading: _Avatar(
                     name: person['name'] as String? ?? '?',
                     avatarId: person['avatarId'] as String? ?? '',
-                    heroPreset: person['heroPreset'] as String?,
-                    avatarStyle:
-                        person['avatarStyle'] as Map<String, dynamic>?),
+                    heroPreset: person['heroPreset'] as String?),
                 title: Text(person['name'] as String? ?? ''),
                 subtitle: Text(
                     accepted
@@ -255,14 +249,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar(
-      {required this.name,
-      this.avatarId = '',
-      this.avatarStyle,
-      this.heroPreset});
+  const _Avatar({required this.name, this.avatarId = '', this.heroPreset});
   final String name;
   final String avatarId;
-  final Map<String, dynamic>? avatarStyle;
   final String? heroPreset;
   @override
   Widget build(BuildContext context) {
@@ -271,10 +260,10 @@ class _Avatar extends StatelessWidget {
       foregroundImage: avatarId.isEmpty
           ? null
           : NetworkImage('${api.base}/media/$avatarId', headers: api.headers),
-      child: heroAvatarImage(heroPreset) == null
-          ? AvatarFigure(style: avatarStyle, compact: true)
+      child: heroAvatarFace(heroPreset) == null
+          ? Text(name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase())
           : ClipOval(
-              child: Image.asset(heroAvatarImage(heroPreset)!,
+              child: Image.asset(heroAvatarFace(heroPreset)!,
                   width: 48, height: 48, fit: BoxFit.cover)),
     );
   }
@@ -319,8 +308,9 @@ class _ConversationScreenState extends State<_ConversationScreen>
   bool sending = false;
   bool recording = false;
   String? error;
+  late Map<String, dynamic> peer = Map<String, dynamic>.from(widget.peer);
 
-  String get peerId => widget.peer['id'] as String;
+  String get peerId => peer['id'] as String;
 
   @override
   void initState() {
@@ -359,11 +349,18 @@ class _ConversationScreenState extends State<_ConversationScreen>
     try {
       final api = _ChatApi(context.read<MusicController>());
       await flushChatQueue(context.read<MusicController>());
-      final result = await api.get('/$peerId');
+      final responses =
+          await Future.wait([api.get('/$peerId'), api.get('/friends')]);
+      final result = responses.first;
+      final friends = responses.last as List;
+      final updated = friends.cast<Map<String, dynamic>?>().firstWhere(
+          (entry) => entry?['person']?['id'] == peerId,
+          orElse: () => null)?['person'];
       await api.post('/$peerId/read', {});
       if (mounted)
         setState(() {
           messages = result as List;
+          if (updated is Map<String, dynamic>) peer = updated;
           error = null;
         });
     } catch (e) {
@@ -545,15 +542,28 @@ class _ConversationScreenState extends State<_ConversationScreen>
     final controller = context.watch<MusicController>();
     return Scaffold(
       appBar: AppBar(
-          title: Row(children: [
-        _Avatar(
-            name: widget.peer['name'] as String? ?? '?',
-            avatarId: widget.peer['avatarId'] as String? ?? '',
-            heroPreset: widget.peer['heroPreset'] as String?,
-            avatarStyle: widget.peer['avatarStyle'] as Map<String, dynamic>?),
-        const SizedBox(width: 10),
-        Expanded(child: Text(widget.peer['name'] as String? ?? 'Chat')),
-      ])),
+          title: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                      builder: (_) => _FriendProfileScreen(peer: peer))),
+              child: Row(children: [
+                _Avatar(
+                    name: peer['name'] as String? ?? '?',
+                    avatarId: peer['avatarId'] as String? ?? '',
+                    heroPreset: peer['heroPreset'] as String?),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(peer['name'] as String? ?? 'Chat'),
+                    Text(peer['online'] == true ? 'Active now' : 'View profile',
+                        style: Theme.of(context).textTheme.labelSmall),
+                  ],
+                )),
+              ]))),
       body: Column(children: [
         if (error != null)
           Padding(padding: const EdgeInsets.all(8), child: Text(error!)),
@@ -567,6 +577,7 @@ class _ConversationScreenState extends State<_ConversationScreen>
                 messages[messages.length - index - 1] as Map<String, dynamic>;
             final mine = message['senderId'] == controller.memberId;
             final kind = message['kind'] as String? ?? 'text';
+            final mediaId = message['mediaId']?.toString().trim() ?? '';
             return Align(
               alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
               child: Card(
@@ -576,18 +587,16 @@ class _ConversationScreenState extends State<_ConversationScreen>
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 10),
-                    child: kind == 'audio' &&
-                            message['mediaId'] is String &&
-                            (message['mediaId'] as String).isNotEmpty
-                        ? _VoiceMessage(mediaId: message['mediaId'] as String)
+                    child: kind == 'audio' && mediaId.isNotEmpty
+                        ? _VoiceMessage(
+                            mediaId: mediaId,
+                            fileName: message['fileName']?.toString() ?? '')
                         : kind == 'audio'
                             ? const Text('Voice message unavailable')
                             : kind == 'sticker'
                                 ? Text(message['text'] as String? ?? '',
                                     style: const TextStyle(fontSize: 42))
-                                : message['mediaId'] != null &&
-                                        (message['mediaId'] as String)
-                                            .isNotEmpty
+                                : mediaId.isNotEmpty
                                     ? InkWell(
                                         onTap: () => _showAttachment(message),
                                         child: Row(
@@ -676,8 +685,9 @@ class _ConversationScreenState extends State<_ConversationScreen>
 }
 
 class _VoiceMessage extends StatefulWidget {
-  const _VoiceMessage({required this.mediaId});
+  const _VoiceMessage({required this.mediaId, required this.fileName});
   final String mediaId;
+  final String fileName;
 
   @override
   State<_VoiceMessage> createState() => _VoiceMessageState();
@@ -687,6 +697,7 @@ class _VoiceMessageState extends State<_VoiceMessage> {
   final AudioPlayer player = AudioPlayer();
   File? temporaryFile;
   bool loading = false;
+  bool prepared = false;
 
   @override
   void dispose() {
@@ -704,28 +715,34 @@ class _VoiceMessageState extends State<_VoiceMessage> {
       if (player.processingState == ProcessingState.completed) {
         await player.seek(Duration.zero);
       }
-      if (temporaryFile == null) {
+      if (!prepared) {
         setState(() => loading = true);
-        final bytes = await _ChatApi(context.read<MusicController>())
-            .download(widget.mediaId);
-        if (bytes.isEmpty) {
-          throw StateError('This recording is empty or has expired.');
+        final api = _ChatApi(context.read<MusicController>());
+        try {
+          await player.setAudioSource(AudioSource.uri(
+              Uri.parse('${api.base}/media/${widget.mediaId}'),
+              headers: api.headers));
+        } on PlatformException {
+          final bytes = await api.download(widget.mediaId);
+          if (bytes.isEmpty) {
+            throw StateError('This recording is empty or has expired.');
+          }
+          final dir = await getTemporaryDirectory();
+          final extension = _audioExtension(bytes, widget.fileName);
+          temporaryFile = File('${dir.path}/chat-${widget.mediaId}$extension');
+          await temporaryFile!.writeAsBytes(bytes, flush: true);
+          await player.setFilePath(temporaryFile!.path);
         }
-        final dir = await getTemporaryDirectory();
-        temporaryFile = File('${dir.path}/chat-${widget.mediaId}.m4a');
-        await temporaryFile!.writeAsBytes(bytes, flush: true);
-        await player.setFilePath(temporaryFile!.path);
+        prepared = true;
       }
       if (mounted) setState(() => loading = false);
       await player.play();
     } catch (e) {
       if (mounted) {
         setState(() => loading = false);
-        final detail = e.toString();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(detail.isEmpty || detail == 'null'
-                ? 'Could not play this recording. It may have expired.'
-                : 'Could not play voice message: $detail')));
+            content: const Text(
+                'Could not play this voice message. Please ask the sender to record it again.')));
       }
     }
   }
@@ -749,6 +766,137 @@ class _VoiceMessageState extends State<_VoiceMessage> {
               const Text('Voice message'),
             ],
           ));
+}
+
+String _audioExtension(Uint8List bytes, String fileName) {
+  if (bytes.length >= 12 &&
+      ascii.decode(bytes.sublist(4, 8), allowInvalid: true) == 'ftyp') {
+    return '.m4a';
+  }
+  if (bytes.length >= 4 &&
+      ascii.decode(bytes.sublist(0, 4), allowInvalid: true) == 'OggS') {
+    return '.ogg';
+  }
+  if (bytes.length >= 4 &&
+      ascii.decode(bytes.sublist(0, 4), allowInvalid: true) == 'RIFF') {
+    return '.wav';
+  }
+  if (bytes.length >= 3 &&
+      ascii.decode(bytes.sublist(0, 3), allowInvalid: true) == 'ID3') {
+    return '.mp3';
+  }
+  final match = RegExp(r'\.(m4a|mp3|wav|ogg|aac)$', caseSensitive: false)
+      .firstMatch(fileName);
+  return match?.group(0)?.toLowerCase() ?? '.m4a';
+}
+
+class _FriendProfileScreen extends StatelessWidget {
+  const _FriendProfileScreen({required this.peer});
+  final Map<String, dynamic> peer;
+
+  @override
+  Widget build(BuildContext context) {
+    final preset = peer['heroPreset']?.toString();
+    final model = heroAvatarModel(preset);
+    final online = peer['online'] == true;
+    final lastSeen =
+        DateTime.tryParse(peer['lastSeenAt']?.toString() ?? '')?.toLocal();
+    final status = online
+        ? 'Active now'
+        : lastSeen == null
+            ? 'Offline'
+            : 'Last active ${_profileTime(lastSeen)}';
+    return Scaffold(
+      appBar: AppBar(title: Text(peer['name']?.toString() ?? 'Profile')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Container(
+            height: 390,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: const Color(0xFF21162E),
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: model == null
+                ? _ProfilePhoto(
+                    name: peer['name']?.toString() ?? '?',
+                    avatarId: peer['avatarId']?.toString() ?? '')
+                : ModelViewer(
+                    src: model,
+                    poster: heroAvatarImage(preset),
+                    alt: '${peer['name'] ?? 'Friend'} 3D avatar',
+                    autoPlay: true,
+                    cameraControls: true,
+                    disablePan: true,
+                    backgroundColor: const Color(0xFF21162E),
+                  ),
+          ),
+          const SizedBox(height: 20),
+          Text(peer['name']?.toString() ?? '',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 8),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.circle,
+                size: 11, color: online ? Colors.greenAccent : Colors.grey),
+            const SizedBox(width: 7),
+            Text(status),
+          ]),
+          const SizedBox(height: 24),
+          ListTile(
+            leading: const Icon(Icons.email_outlined),
+            title: const Text('Email'),
+            subtitle: Text(peer['email']?.toString() ?? ''),
+          ),
+          if (preset != null && heroAvatarNames[preset] != null)
+            ListTile(
+              leading: const Icon(Icons.view_in_ar_outlined),
+              title: const Text('Avatar'),
+              subtitle: Text(heroAvatarNames[preset]!),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfilePhoto extends StatelessWidget {
+  const _ProfilePhoto({required this.name, required this.avatarId});
+  final String name;
+  final String avatarId;
+
+  @override
+  Widget build(BuildContext context) {
+    if (avatarId.isEmpty) {
+      return Center(
+          child: Text(name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
+              style: Theme.of(context).textTheme.displayLarge));
+    }
+    final api = _ChatApi(context.read<MusicController>());
+    return InteractiveViewer(
+      child: Image.network(
+        '${api.base}/media/$avatarId',
+        headers: api.headers,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.contain,
+        loadingBuilder: (context, child, progress) => progress == null
+            ? child
+            : const Center(child: CircularProgressIndicator()),
+        errorBuilder: (_, __, ___) =>
+            const Center(child: Icon(Icons.broken_image_outlined, size: 64)),
+      ),
+    );
+  }
+}
+
+String _profileTime(DateTime value) {
+  final difference = DateTime.now().difference(value);
+  if (difference.inMinutes < 1) return 'just now';
+  if (difference.inHours < 1) return '${difference.inMinutes} min ago';
+  if (difference.inDays < 1) return '${difference.inHours} hr ago';
+  return '${difference.inDays} day${difference.inDays == 1 ? '' : 's'} ago';
 }
 
 const _chatAlerts = MethodChannel('telugu_tunes/chat_alerts');

@@ -13,6 +13,7 @@ import com.telugutunes.api.repository.ChatAvatarRepository;
 import com.telugutunes.api.repository.ChatReadRepository;
 import com.telugutunes.api.repository.FriendshipRepository;
 import com.telugutunes.api.repository.MemberRepository;
+import com.telugutunes.api.service.MemberActivityService;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Comparator;
@@ -47,20 +48,23 @@ public class MessagesController {
   private final ChatAvatarRepository avatars;
   private final ChatReadRepository reads;
   private final GridFsTemplate files;
+  private final MemberActivityService activity;
 
   public MessagesController(MemberRepository members, FriendshipRepository friendships,
       ChatMessageRepository messages, ChatAvatarRepository avatars,
-      ChatReadRepository reads, GridFsTemplate files) {
+      ChatReadRepository reads, GridFsTemplate files, MemberActivityService activity) {
     this.members = members;
     this.friendships = friendships;
     this.messages = messages;
     this.avatars = avatars;
     this.reads = reads;
     this.files = files;
+    this.activity = activity;
   }
 
   public record Person(String id, String name, String email, String avatarId,
-      String avatarEmoji, AvatarStyle avatarStyle, String heroPreset) {}
+      String avatarEmoji, AvatarStyle avatarStyle, String heroPreset,
+      boolean online, Instant lastSeenAt) {}
   public record FriendView(String id, String status, boolean incoming, Person person,
       ChatMessageDocument lastMessage, long unreadCount) {}
   public record FriendRequest(String email) {}
@@ -183,8 +187,8 @@ public class MessagesController {
   public Person avatarPreset(
       @RequestAttribute(AuthenticationFilter.MEMBER_ID_ATTRIBUTE) String self,
       @RequestBody HeroPresetChoice choice) {
-    if (choice == null || !List.of("spiderman", "ironman", "batman", "hulk",
-        "drdoom", "loki", "doraemon", "wonderwoman", "pikachu")
+    if (choice == null || !List.of("spiderman", "ironman", "batman",
+        "doraemon", "wonderwoman", "pikachu", "superman")
         .contains(choice.presetId()))
       throw new IllegalArgumentException("Choose an avatar from the list.");
     avatars.save(new ChatAvatarDocument(self, "", "", null, choice.presetId()));
@@ -310,10 +314,12 @@ public class MessagesController {
 
   private Person person(Member member) {
     var avatar = avatars.findById(member.id()).orElse(new ChatAvatarDocument(member.id(), "", "", null, ""));
+    var status = activity.allByMemberId().get(member.id());
     return new Person(member.id(), member.displayName(), member.email(),
         avatar.mediaId() == null ? "" : avatar.mediaId(),
         avatar.emoji() == null ? "" : avatar.emoji(), avatar.style(),
-        avatar.heroPreset() == null ? "" : avatar.heroPreset());
+        avatar.heroPreset() == null ? "" : avatar.heroPreset(),
+        activity.online(status, Instant.now()), status == null ? null : status.lastSeenAt());
   }
 
   private String conversationId(String a, String b) {
