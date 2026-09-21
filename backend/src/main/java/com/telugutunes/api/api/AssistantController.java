@@ -29,4 +29,10 @@ public class AssistantController {
   public MetadataSuggestionResponse metadata(@Valid @RequestBody MetadataSuggestionRequest request) {
     return assistant.suggestMetadata(request.query());
   }
+
+  @PostMapping("/metadata/youtube")
+  public MetadataSuggestionResponse youtubeMetadata(
+      @Valid @RequestBody MetadataSuggestionRequest request) {
+    return assistant.suggestYouTubeMetadata(request.query());
+  }
 }

@@ -8,6 +8,30 @@ import 'package:telugu_tunes/main.dart';
 import 'package:telugu_tunes/state/music_controller.dart';
 
 void main() {
+  testWidgets('subtype wraps and survives previous and menu playback',
+      (tester) async {
+    final controller = MusicController(MockMusicRepository());
+    await controller.load();
+    final songs = controller.allTracks.take(3).toList();
+    await controller.play(songs[1],
+        sequence: songs.take(2).toList(), loopSequence: true);
+    await controller.skipNext();
+    expect(controller.current?.id, songs[0].id);
+    await controller.skipPrevious();
+    expect(controller.current?.id, songs[1].id);
+    await controller.play(songs[1]);
+    await controller.skipNext();
+    expect(controller.current?.id, songs[0].id);
+    controller.addToPlaybackQueue(songs[2]);
+    controller.addToPlaybackQueue(songs[2]);
+    expect(controller.playbackQueue.length, 3);
+    controller.playNextInQueue(songs[2]);
+    await controller.skipNext();
+    expect(controller.current?.id, songs[2].id);
+    controller.dispose();
+    await tester.pump();
+  });
+
   Future<void> pumpUi(WidgetTester tester) async {
     for (var index = 0; index < 6; index++) {
       await tester.pump(const Duration(milliseconds: 100));
@@ -32,6 +56,31 @@ void main() {
     await tester.tap(find.text('See all').first);
     await pumpUi(tester);
     expect(find.text('All albums'), findsOneWidget);
+  });
+
+  testWidgets('phone back follows tab history and confirms exit',
+      (tester) async {
+    await tester.pumpWidget(const TeluguTunesApp(useMockData: true));
+    await pumpUi(tester);
+    final controller =
+        tester.element(find.byType(AppShell)).read<MusicController>();
+    await tester.tap(find.byIcon(Icons.search_rounded).last);
+    await pumpUi(tester);
+    await tester.tap(find.byIcon(Icons.library_music_rounded).last);
+    await pumpUi(tester);
+    expect(controller.activeTab, 2);
+    await tester.binding.handlePopRoute();
+    await pumpUi(tester);
+    expect(controller.activeTab, 1);
+    await tester.binding.handlePopRoute();
+    await pumpUi(tester);
+    expect(controller.activeTab, 0);
+    await tester.binding.handlePopRoute();
+    await pumpUi(tester);
+    expect(find.text('Exit Telugu Tunes?'), findsOneWidget);
+    await tester.tap(find.text('Stay'));
+    await pumpUi(tester);
+    expect(controller.activeTab, 0);
   });
 
   testWidgets('closing a room returns to the lobby without a framework error',
@@ -119,7 +168,7 @@ void main() {
     expect(find.text('Details'), findsOneWidget);
     expect(find.byTooltip('Next'), findsOneWidget);
 
-    controller.setTab(4);
+    controller.setTab(5);
     await pumpUi(tester);
     expect(find.byTooltip('Next'), findsNothing);
   });

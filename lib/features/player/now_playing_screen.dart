@@ -24,6 +24,7 @@ class NowPlayingScreen extends StatelessWidget {
         ),
       );
     }
+    final light = Theme.of(context).brightness == Brightness.light;
     return Scaffold(
       body: MusicalAurora(
         notes: true,
@@ -34,11 +35,17 @@ class NowPlayingScreen extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                const Color(0xFF6729D8),
-                const Color(0xFF2A1251),
-                const Color(0xFF0B0615),
-              ],
+              colors: light
+                  ? const [
+                      Color(0xFFF0E7FF),
+                      Color(0xFFF8F4FF),
+                      Color(0xFFFFFFFF)
+                    ]
+                  : const [
+                      Color(0xFF6729D8),
+                      Color(0xFF2A1251),
+                      Color(0xFF0B0615)
+                    ],
               stops: const [0, .4, 1],
             ),
           ),
@@ -145,7 +152,7 @@ class NowPlayingScreen extends StatelessWidget {
                                       : Icons.favorite_border_rounded,
                                   color: controller.isFavorite(track)
                                       ? Colors.pinkAccent
-                                      : Colors.white,
+                                      : Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                             ],
@@ -509,7 +516,9 @@ class _LyricsPanel extends StatelessWidget {
                     Text(currentEnglishLine.text,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.white70,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                               height: 1.35,
                             )),
                   ],
@@ -718,7 +727,9 @@ class _SyncedLyricsSheet extends StatelessWidget {
                                             ? Theme.of(context)
                                                 .colorScheme
                                                 .primary
-                                            : Colors.white60,
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
                                       )),
                                 ),
                           onTap: () => controller.seekTo(line.start),

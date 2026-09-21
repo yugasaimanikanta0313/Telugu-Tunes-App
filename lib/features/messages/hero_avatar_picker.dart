@@ -12,13 +12,49 @@ const heroAvatarNames = <String, String>{
   'wonderwoman': 'Wonder Woman',
 };
 
-String? heroAvatarImage(String? id) =>
-    heroAvatarNames.containsKey(id) ? 'assets/hero_avatars/$id.png' : null;
-String? heroAvatarModel(String? id) =>
-    heroAvatarNames.containsKey(id) ? 'assets/avatar_models/$id.glb' : null;
-String? heroAvatarFace(String? id) => heroAvatarNames.containsKey(id)
-    ? 'assets/hero_avatars/${id}_face.png'
-    : null;
+String? _canonicalHeroKey(String? nameOrId) {
+  if (nameOrId == null) return null;
+  final clean =
+      nameOrId.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  if (heroAvatarNames.containsKey(clean)) return clean;
+  for (final key in heroAvatarNames.keys) {
+    if (clean.contains(key) || key.contains(clean)) return key;
+  }
+  return null;
+}
+
+String? heroAvatarImage(String? id, [String? fallbackName]) {
+  if (id != null && heroAvatarNames.containsKey(id)) {
+    return 'assets/hero_avatars/$id.png';
+  }
+  final key = _canonicalHeroKey(fallbackName);
+  if (key != null) {
+    return 'assets/hero_avatars/$key.png';
+  }
+  return null;
+}
+
+String? heroAvatarModel(String? id, [String? fallbackName]) {
+  if (id != null && heroAvatarNames.containsKey(id)) {
+    return 'assets/avatar_models/$id.glb';
+  }
+  final key = _canonicalHeroKey(fallbackName);
+  if (key != null) {
+    return 'assets/avatar_models/$key.glb';
+  }
+  return null;
+}
+
+String? heroAvatarFace(String? id, [String? fallbackName]) {
+  if (id != null && heroAvatarNames.containsKey(id)) {
+    return 'assets/hero_avatars/${id}_face.png';
+  }
+  final key = _canonicalHeroKey(fallbackName);
+  if (key != null) {
+    return 'assets/hero_avatars/${key}_face.png';
+  }
+  return null;
+}
 
 class HeroAvatarPicker extends StatefulWidget {
   const HeroAvatarPicker(
@@ -71,20 +107,28 @@ class _HeroAvatarPickerState extends State<HeroAvatarPicker> {
   Future<void> _save() async {
     setState(() => saving = true);
     try {
-      if (dateOfBirth == null || city.text.trim().isEmpty) {
-        throw StateError('Choose your date of birth and enter your city.');
-      }
-      final dob =
-          '${dateOfBirth!.year.toString().padLeft(4, '0')}-${dateOfBirth!.month.toString().padLeft(2, '0')}-${dateOfBirth!.day.toString().padLeft(2, '0')}';
-      await widget.onSaveDetails(dob, city.text.trim());
+      // 1. Always prioritize saving the selected 3D avatar preset immediately.
       await widget.onSave(selected);
+
+      // 2. Persist optional profile details if the user supplied them.
+      if (dateOfBirth != null && city.text.trim().isNotEmpty) {
+        final dob =
+            '${dateOfBirth!.year.toString().padLeft(4, '0')}-${dateOfBirth!.month.toString().padLeft(2, '0')}-${dateOfBirth!.day.toString().padLeft(2, '0')}';
+        try {
+          await widget.onSaveDetails(dob, city.text.trim());
+        } catch (_) {
+          // Failure to update supplementary details does not revert the avatar selection.
+        }
+      }
+
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, selected);
       }
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Could not save avatar: $error')));
+      }
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -108,8 +152,12 @@ class _HeroAvatarPickerState extends State<HeroAvatarPicker> {
     final name = heroAvatarNames[selected] ??
         managed[selected]?['name']?.toString() ??
         'Avatar';
-    final model = heroAvatarModel(selected) ??
+    final model = heroAvatarModel(selected, name) ??
         '${widget.apiBaseUrl}/avatar-catalog/public/$selected/model';
+    final poster = (managed[selected]?['previewMediaId'] != null
+            ? '${widget.apiBaseUrl}/avatar-catalog/public/$selected/preview'
+            : null) ??
+        heroAvatarImage(selected, name);
     final ids = [...visibleBundled, ...managed.keys];
     return Scaffold(
       appBar: AppBar(title: const Text('Choose your 3D avatar'), actions: [
@@ -159,7 +207,7 @@ class _HeroAvatarPickerState extends State<HeroAvatarPicker> {
           child: ModelViewer(
             key: ValueKey(selected),
             src: model,
-            poster: heroAvatarImage(selected),
+            poster: poster,
             alt: 'Interactive 3D $name avatar',
             loading: Loading.eager,
             reveal: Reveal.auto,
@@ -189,6 +237,13 @@ class _HeroAvatarPickerState extends State<HeroAvatarPicker> {
             itemCount: ids.length,
             itemBuilder: (context, index) {
               final id = ids[index];
+              final itemManaged = managed[id];
+              final itemName = heroAvatarNames[id] ??
+                  itemManaged?['name']?.toString() ??
+                  'Avatar';
+              final itemAsset = heroAvatarImage(id, itemName);
+              final previewMediaId = itemManaged?['previewMediaId'];
+
               return InkWell(
                   onTap: () => setState(() => selected = id),
                   borderRadius: BorderRadius.circular(14),
@@ -207,17 +262,22 @@ class _HeroAvatarPickerState extends State<HeroAvatarPicker> {
                         Expanded(
                             child: Padding(
                                 padding: const EdgeInsets.all(4),
-                                child: heroAvatarImage(id) == null
-                                    ? const Icon(Icons.view_in_ar_rounded,
-                                        size: 48)
-                                    : Image.asset(heroAvatarImage(id)!,
-                                        fit: BoxFit.contain))),
+                                child: itemAsset != null
+                                    ? Image.asset(itemAsset,
+                                        fit: BoxFit.contain)
+                                    : previewMediaId != null
+                                        ? Image.network(
+                                            '${widget.apiBaseUrl}/avatar-catalog/public/$id/preview',
+                                            fit: BoxFit.contain,
+                                            errorBuilder: (_, __, ___) =>
+                                                const Icon(
+                                                    Icons.view_in_ar_rounded,
+                                                    size: 48))
+                                        : const Icon(Icons.view_in_ar_rounded,
+                                            size: 48))),
                         Padding(
                             padding: const EdgeInsets.only(bottom: 6),
-                            child: Text(
-                                heroAvatarNames[id] ??
-                                    managed[id]?['name']?.toString() ??
-                                    'Avatar',
+                            child: Text(itemName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontSize: 11))),

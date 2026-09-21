@@ -88,6 +88,7 @@ class Artwork extends StatelessWidget {
       borderRadius: BorderRadius.circular(size * .18),
       child: CachedNetworkImage(
         imageUrl: imageUrl,
+        errorListener: (_) {},
         memCacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
         fadeInDuration: const Duration(milliseconds: 180),
         imageBuilder: (_, imageProvider) => ColoredBox(
@@ -110,7 +111,11 @@ class Artwork extends StatelessWidget {
 bool canLoadArtwork(String value) {
   final uri = Uri.tryParse(value);
   if (uri == null || !uri.hasScheme || uri.host.isEmpty) return false;
-  return !uri.host.toLowerCase().endsWith('sunnxt.com');
+  final host = uri.host.toLowerCase();
+  // These CDNs return images without the cross-origin headers required by
+  // Flutter web's image decoder. Use the artwork placeholder instead of
+  // repeatedly throwing an EncodingError in the browser.
+  return !host.endsWith('sunnxt.com') && host != 'static.toiimg.com';
 }
 
 Future<ArtworkCandidate?> showArtworkPicker(
@@ -389,7 +394,10 @@ class Pill extends StatelessWidget {
       );
 }
 
-Future<void> showTrackActions(BuildContext context, Track track) async {
+Future<void> showTrackActions(BuildContext context, Track track,
+    {List<Track>? sequence,
+    bool loopSequence = false,
+    String sourceLabel = 'Catalog'}) async {
   final controller = context.read<MusicController>();
   await showModalBottomSheet<void>(
     context: context,
@@ -409,9 +417,35 @@ Future<void> showTrackActions(BuildContext context, Track track) async {
                   leading: const Icon(Icons.play_arrow_rounded),
                   title: const Text('Play now'),
                   onTap: () {
-                    controller.play(track);
+                    controller.play(track,
+                        sequence: sequence,
+                        loopSequence: loopSequence,
+                        sourceLabel: sourceLabel);
                     Navigator.pop(sheetContext);
                   }),
+              if (controller.room == null) ...[
+                ListTile(
+                  leading: const Icon(Icons.queue_music_rounded),
+                  title: const Text('Add to queue'),
+                  onTap: () {
+                    controller.addToPlaybackQueue(track);
+                    Navigator.pop(sheetContext);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${track.title} added to queue')),
+                    );
+                  },
+                ),
+                if (controller.current != null &&
+                    controller.current?.id != track.id)
+                  ListTile(
+                    leading: const Icon(Icons.playlist_play_rounded),
+                    title: const Text('Play next'),
+                    onTap: () {
+                      controller.playNextInQueue(track);
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+              ],
               ListTile(
                   leading: const Icon(Icons.playlist_add_rounded),
                   title: const Text('Add to a playlist'),
@@ -771,7 +805,7 @@ Future<void> showEditTrackDialog(BuildContext context, Track track) async {
   final color = TextEditingController(text: track.color);
   final artworkUrl = TextEditingController(text: track.artworkUrl);
   final sourceUrl = TextEditingController(text: track.sourceUrl);
-  await showDialog<void>(
+  final route = DialogRoute<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: const Text('Edit song details'),
@@ -902,6 +936,10 @@ Future<void> showEditTrackDialog(BuildContext context, Track track) async {
       ],
     ),
   );
+  await Navigator.of(context, rootNavigator: true).push(route);
+  // A route's pop result completes before its reverse transition has removed
+  // the dialog widgets. Wait for removal before disposing their controllers.
+  await route.completed;
   title.dispose();
   artist.dispose();
   album.dispose();

@@ -294,14 +294,22 @@ class _Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final api = _ChatApi(context.read<MusicController>());
+    final faceAsset = heroAvatarFace(heroPreset) ?? heroAvatarFace(null, name);
+    final managed = heroPreset != null &&
+        heroPreset!.isNotEmpty &&
+        !heroAvatarNames.containsKey(heroPreset);
     return CircleAvatar(
-      foregroundImage: avatarId.isEmpty
-          ? null
-          : NetworkImage('${api.base}/media/$avatarId', headers: api.headers),
-      child: heroAvatarFace(heroPreset) == null
+      foregroundImage: managed
+          ? NetworkImage(
+              '${api.apiBase}/avatar-catalog/public/$heroPreset/preview')
+          : avatarId.isEmpty
+              ? null
+              : NetworkImage('${api.base}/media/$avatarId', headers: api.headers),
+      onForegroundImageError: (_, __) {},
+      child: faceAsset == null
           ? Text(name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase())
           : ClipOval(
-              child: Image.asset(heroAvatarFace(heroPreset)!,
+              child: Image.asset(faceAsset,
                   width: 48, height: 48, fit: BoxFit.cover)),
     );
   }
@@ -1002,7 +1010,17 @@ class _FriendProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final preset = peer['heroPreset']?.toString();
-    final model = heroAvatarModel(preset);
+    final controller = context.read<MusicController>();
+    final hasPreset = preset != null && preset.isNotEmpty;
+    final peerName = peer['name']?.toString();
+    final model = !hasPreset
+        ? null
+        : heroAvatarModel(preset, peerName) ??
+            '${controller.apiBaseUrl}/avatar-catalog/public/$preset/model';
+    final poster = !hasPreset
+        ? null
+        : (heroAvatarImage(preset, peerName) ??
+            '${controller.apiBaseUrl}/avatar-catalog/public/$preset/preview');
     final online = peer['online'] == true;
     final lastSeen =
         DateTime.tryParse(peer['lastSeenAt']?.toString() ?? '')?.toLocal();
@@ -1029,7 +1047,7 @@ class _FriendProfileScreen extends StatelessWidget {
                     avatarId: peer['avatarId']?.toString() ?? '')
                 : ModelViewer(
                     src: model,
-                    poster: heroAvatarImage(preset),
+                    poster: poster,
                     alt: '${peer['name'] ?? 'Friend'} 3D avatar',
                     autoPlay: true,
                     cameraControls: true,
@@ -1054,11 +1072,11 @@ class _FriendProfileScreen extends StatelessWidget {
             title: const Text('Email'),
             subtitle: Text(peer['email']?.toString() ?? ''),
           ),
-          if (preset != null && heroAvatarNames[preset] != null)
+          if (preset != null && hasPreset)
             ListTile(
               leading: const Icon(Icons.view_in_ar_outlined),
               title: const Text('Avatar'),
-              subtitle: Text(heroAvatarNames[preset]!),
+              subtitle: Text(heroAvatarNames[preset] ?? '3D Avatar'),
             ),
         ],
       ),
@@ -1192,9 +1210,11 @@ Future<void> flushChatQueue(MusicController controller) async {
 
 class _ChatApi {
   _ChatApi(MusicController controller)
-      : base = '${controller.apiBaseUrl}/messages',
+      : apiBase = controller.apiBaseUrl,
+        base = '${controller.apiBaseUrl}/messages',
         token = controller.authToken,
         memberId = controller.memberId;
+  final String apiBase;
   final String base;
   final String token;
   final String memberId;

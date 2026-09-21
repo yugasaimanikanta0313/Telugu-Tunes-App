@@ -40,4 +40,47 @@ void main() {
     expect(playlists.single.ownedByCurrentMember, isFalse);
     expect(playlists.single.sharedWithMemberIds, ['6a8cd7fdc740c0b2f7dfe373']);
   });
+
+  test('YouTube metadata falls back when the dedicated route is unavailable',
+      () async {
+    final requestedPaths = <String>[];
+    final client = MockClient((request) async {
+      requestedPaths.add(request.url.path);
+      if (request.url.path.endsWith('/metadata/youtube')) {
+        return http.Response('{"status":404}', 404,
+            headers: {'content-type': 'application/json'});
+      }
+      return http.Response(
+        '''{
+          "title":"Devuda",
+          "artist":"Mani Sharma",
+          "album":"Pokiri",
+          "singers":"Naveen",
+          "musicDirector":"Mani Sharma",
+          "genre":"Film Soundtrack",
+          "thumbnailUrl":"https://example.com/cover.jpg",
+          "sourceUrl":"https://youtube.com/watch?v=test",
+          "source":"YouTube",
+          "generated":false,
+          "notice":"YouTube fallback",
+          "artworkCandidates":[]
+        }''',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    final service = SpringBootMusicApiService(
+      const BackendConfig(baseUrl: 'http://localhost/api/v1'),
+      client: client,
+    );
+
+    final suggestion = await service.suggestYouTubeMetadata('Devuda');
+
+    expect(requestedPaths, [
+      '/api/v1/assistant/metadata/youtube',
+      '/api/v1/assistant/metadata',
+    ]);
+    expect(suggestion.title, 'Devuda');
+    expect(suggestion.thumbnailUrl, 'https://example.com/cover.jpg');
+  });
 }

@@ -88,6 +88,25 @@ public class GeminiAssistantService {
     }
   }
 
+  /** Catalog fallback that never calls Gemini or Groq. */
+  public MetadataSuggestionResponse suggestYouTubeMetadata(String query) {
+    var fallback = fallback(query, "No YouTube metadata match was found. Enter details manually.");
+    var video = youtube.find(query).orElse(null);
+    if (video == null) return fallback;
+    var catalogQuery = queryCleaner.clean(video.title());
+    if (catalogQuery.isBlank()) catalogQuery = video.title();
+    var appleMatches = itunes.findCandidates(catalogQuery);
+    var apple = appleMatches.isEmpty() ? null : appleMatches.getFirst();
+    var artworkCandidates = artworkCandidates(video, appleMatches, catalogQuery);
+    var sourced = mergeSources(fallback, video, apple, artworkCandidates);
+    return new MetadataSuggestionResponse(
+        sourced.title(), sourced.artist(), sourced.album(), sourced.singers(),
+        sourced.musicDirector(), sourced.genre(), sourced.year(), sourced.color(),
+        sourced.thumbnailUrl(), sourced.sourceUrl(), sourceName(video, apple), false,
+        "Excel catalog had no match, so YouTube metadata was used. Review before saving.",
+        sourced.artworkCandidates());
+  }
+
   private MetadataSuggestionResponse groqMetadataOrSource(
       String query,
       YouTubeMetadataService.VideoMetadata video,

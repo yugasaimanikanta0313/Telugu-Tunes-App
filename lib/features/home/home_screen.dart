@@ -657,7 +657,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           'Recommended playlist • ${playlist.name} • ${playlist.subtype}');
                   Navigator.pop(sheetContext);
                 },
-                onMore: () => showTrackActions(context, track),
+                onMore: () => showTrackActions(context, track,
+                    sequence: playlist.tracks,
+                    loopSequence: true,
+                    sourceLabel:
+                        'Recommended playlist • ${playlist.name} • ${playlist.subtype}'),
               )),
           const SizedBox(height: 16),
         ]),

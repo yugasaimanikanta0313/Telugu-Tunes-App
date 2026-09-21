@@ -232,7 +232,11 @@ class _SubtypeScheduleCard extends StatelessWidget {
                             loopSequence: true,
                             sourceLabel:
                                 'Recommended playlist • ${playlist.name} • ${playlist.subtype}'),
-                        onMore: () => showTrackActions(context, track),
+                        onMore: () => showTrackActions(context, track,
+                            sequence: playlist.tracks,
+                            loopSequence: true,
+                            sourceLabel:
+                                'Recommended playlist • ${playlist.name} • ${playlist.subtype}'),
                       ))
                   .toList(),
         ),

@@ -7,16 +7,18 @@ class ArtworkPaletteService {
 
   Future<int?> dominantColor(String imageUrl) async {
     final uri = Uri.tryParse(imageUrl);
+    final host = uri?.host.toLowerCase() ?? '';
     if (uri == null ||
-        uri.host.isEmpty ||
-        uri.host.toLowerCase().endsWith('sunnxt.com')) {
+        host.isEmpty ||
+        host.endsWith('sunnxt.com') ||
+        host == 'static.toiimg.com') {
       return null;
     }
     final cached = _memoryCache[imageUrl];
     if (cached != null) return cached;
     try {
       final palette = await PaletteGenerator.fromImageProvider(
-        CachedNetworkImageProvider(imageUrl),
+        CachedNetworkImageProvider(imageUrl, errorListener: (_) {}),
         maximumColorCount: 12,
         size: const Size(160, 160),
       );

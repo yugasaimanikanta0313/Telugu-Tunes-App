@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../state/music_controller.dart';
+import '../messages/hero_avatar_picker.dart';
 
 class AvatarManagementScreen extends StatefulWidget {
   const AvatarManagementScreen({super.key});
@@ -54,6 +55,15 @@ class _AvatarManagementScreenState extends State<AvatarManagementScreen> {
     final picked = await FilePicker.pickFiles(
         type: FileType.custom, allowedExtensions: ['glb'], withData: true);
     if (picked == null || picked.files.first.bytes == null || !mounted) return;
+    final preview = await FilePicker.pickFiles(
+        dialogTitle: 'Choose the avatar preview picture',
+        type: FileType.image,
+        withData: true);
+    if (preview == null || preview.files.first.bytes == null || !mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Choose a preview picture so users can see the avatar.')));
+      return;
+    }
     final name = TextEditingController(
         text: picked.files.first.name.replaceAll(RegExp(r'\.glb$'), ''));
     final title = await showDialog<String>(
@@ -79,11 +89,50 @@ class _AvatarManagementScreenState extends State<AvatarManagementScreen> {
       ..fields['name'] = title
       ..files.add(http.MultipartFile.fromBytes(
           'file', picked.files.first.bytes!,
-          filename: picked.files.first.name));
+          filename: picked.files.first.name))
+      ..files.add(http.MultipartFile.fromBytes(
+          'preview', preview.files.first.bytes!,
+          filename: preview.files.first.name));
     final response = await request.send();
-    if (response.statusCode >= 300) throw StateError('Avatar upload failed.');
+    if (response.statusCode >= 300) {
+      throw StateError('Avatar upload failed (${response.statusCode}).');
+    }
     if (mounted) setState(() => busy = false);
     await _load();
+  }
+
+  Future<void> _updatePreview(String id) async {
+    final preview = await FilePicker.pickFiles(
+        dialogTitle: 'Choose the avatar preview picture',
+        type: FileType.image,
+        withData: true);
+    if (preview == null || preview.files.first.bytes == null || !mounted) return;
+    setState(() => busy = true);
+    try {
+      final c = context.read<MusicController>();
+      final request = http.MultipartRequest(
+          'POST', Uri.parse('${c.apiBaseUrl}/avatar-catalog/$id/preview'))
+        ..headers['Authorization'] = 'Bearer ${c.authToken}'
+        ..files.add(http.MultipartFile.fromBytes(
+            'preview', preview.files.first.bytes!,
+            filename: preview.files.first.name));
+      final response = await request.send();
+      if (response.statusCode >= 300) {
+        throw StateError('Preview upload failed (${response.statusCode}).');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Avatar preview picture updated.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+      await _load();
+    }
   }
 
   Future<void> _delete(String id) async {
@@ -143,11 +192,39 @@ class _AvatarManagementScreenState extends State<AvatarManagementScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold))),
         for (final a in avatars)
           ListTile(
-              leading: const Icon(Icons.view_in_ar),
+              leading: a['previewMediaId'] != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Image.network(
+                          '${context.read<MusicController>().apiBaseUrl}/avatar-catalog/public/${a['id']}/preview',
+                          width: 46,
+                          height: 46,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.view_in_ar)))
+                  : heroAvatarImage(null, a['name']?.toString()) != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.asset(
+                              heroAvatarImage(null, a['name']?.toString())!,
+                              width: 46,
+                              height: 46,
+                              fit: BoxFit.cover))
+                      : const Icon(Icons.view_in_ar),
               title: Text(a['name']?.toString() ?? 'Avatar'),
               subtitle: Text(a['fileName']?.toString() ?? ''),
-              trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _delete(a['id'].toString())))
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                      tooltip: 'Update preview picture',
+                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                      onPressed: () => _updatePreview(a['id'].toString())),
+                  IconButton(
+                      tooltip: 'Delete avatar',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => _delete(a['id'].toString())),
+                ],
+              ))
       ]));
 }

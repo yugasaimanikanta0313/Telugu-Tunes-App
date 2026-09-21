@@ -103,15 +103,21 @@ class _MusicMaterialApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorValue =
         context.select<MusicController, int>((value) => value.themeColorValue);
-    return _buildMaterialApp(home, seedColor: Color(colorValue));
+    final useLightTheme =
+        context.select<MusicController, bool>((value) => value.useLightTheme);
+    return _buildMaterialApp(home,
+        seedColor: Color(colorValue), useLightTheme: useLightTheme);
   }
 }
 
 Widget _buildMaterialApp(Widget home,
-        {Color seedColor = const Color(0xffe15184)}) =>
+        {Color seedColor = const Color(0xffe15184),
+        bool useLightTheme = false}) =>
     MaterialApp(
       title: 'Telugu Tunes',
       debugShowCheckedModeBanner: false,
-      theme: teluguTunesTheme(),
+      theme: teluguTunesLightTheme(),
+      darkTheme: teluguTunesTheme(),
+      themeMode: useLightTheme ? ThemeMode.light : ThemeMode.dark,
       home: home,
     );

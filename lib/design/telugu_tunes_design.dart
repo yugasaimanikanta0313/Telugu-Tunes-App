@@ -116,6 +116,100 @@ ThemeData teluguTunesTheme() {
   );
 }
 
+ThemeData teluguTunesLightTheme() {
+  const scheme = ColorScheme.light(
+    primary: Color(0xFF7438B8),
+    onPrimary: Colors.white,
+    primaryContainer: Color(0xFFEBD9FF),
+    onPrimaryContainer: Color(0xFF2C0D48),
+    secondary: Color(0xFF6750A4),
+    onSecondary: Colors.white,
+    surface: Color(0xFFFFF8FF),
+    onSurface: Color(0xFF24182C),
+    error: Color(0xFFBA1A1A),
+    onError: Colors.white,
+  );
+  final rounded = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(22),
+    side: const BorderSide(color: Color(0x227438B8)),
+  );
+  return ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.light,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: const Color(0xFFF9F2FF),
+    canvasColor: const Color(0xFFF9F2FF),
+    dividerColor: const Color(0x227438B8),
+    cardTheme: CardThemeData(
+      color: Colors.white.withValues(alpha: .9),
+      elevation: 0,
+      shape: rounded,
+      clipBehavior: Clip.antiAlias,
+    ),
+    dialogTheme: DialogThemeData(backgroundColor: Colors.white, shape: rounded),
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: Color(0xFFFFF8FF),
+      modalBackgroundColor: Color(0xFFFFF8FF),
+      showDragHandle: true,
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      height: 72,
+      backgroundColor: const Color(0xFFF4E8FF),
+      indicatorColor: const Color(0xFF7438B8).withValues(alpha: .18),
+      labelTextStyle:
+          WidgetStateProperty.all(const TextStyle(fontWeight: FontWeight.w700)),
+    ),
+    navigationRailTheme: const NavigationRailThemeData(
+      backgroundColor: Color(0xFFF4E8FF),
+      indicatorColor: Color(0x337438B8),
+      minWidth: 82,
+      groupAlignment: -.1,
+    ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Color(0xEEFFF8FF),
+      surfaceTintColor: Colors.transparent,
+      titleTextStyle: TextStyle(
+        color: Color(0xFF24182C),
+        fontSize: 23,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Colors.white.withValues(alpha: .86),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0x227438B8)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0x227438B8)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xFF7438B8)),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+    ),
+    pageTransitionsTheme: const PageTransitionsTheme(builders: {
+      TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+      TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+      TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+      TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    }),
+  );
+}
+
 class MusicalAurora extends StatefulWidget {
   const MusicalAurora({
     super.key,
@@ -174,25 +268,31 @@ class _MusicalAuroraState extends State<MusicalAurora>
   }
 
   @override
-  Widget build(BuildContext context) => Stack(
-        fit: StackFit.expand,
-        children: [
-          const ColoredBox(color: TeluguTunesColors.background),
-          RepaintBoundary(
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (_, __) => CustomPaint(
-                painter: _AuroraPainter(
-                  progress: _controller.value,
-                  showNotes: widget.notes,
-                  noteCount: widget.noteCount,
-                ),
+  Widget build(BuildContext context) {
+    final light = Theme.of(context).brightness == Brightness.light;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ColoredBox(
+            color:
+                light ? const Color(0xFFF9F2FF) : TeluguTunesColors.background),
+        RepaintBoundary(
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (_, __) => CustomPaint(
+              painter: _AuroraPainter(
+                progress: _controller.value,
+                showNotes: widget.notes,
+                noteCount: widget.noteCount,
+                light: light,
               ),
             ),
           ),
-          widget.child,
-        ],
-      );
+        ),
+        widget.child,
+      ],
+    );
+  }
 }
 
 class _AuroraPainter extends CustomPainter {
@@ -200,11 +300,13 @@ class _AuroraPainter extends CustomPainter {
     required this.progress,
     required this.showNotes,
     required this.noteCount,
+    required this.light,
   });
 
   final double progress;
   final bool showNotes;
   final int noteCount;
+  final bool light;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -212,7 +314,7 @@ class _AuroraPainter extends CustomPainter {
     void glow(Offset center, double radius, Color color) {
       final paint = Paint()
         ..shader = RadialGradient(colors: [
-          color.withValues(alpha: .20),
+          color.withValues(alpha: light ? .11 : .20),
           color.withValues(alpha: 0),
         ]).createShader(Rect.fromCircle(center: center, radius: radius));
       canvas.drawCircle(center, radius, paint);
@@ -234,13 +336,17 @@ class _AuroraPainter extends CustomPainter {
     const glyphs = ['♪', '♫', '♬', '♩'];
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     for (var index = 0; index < noteCount; index++) {
-      final lane = (index + 1) / (noteCount + 1);
+      final lane = noteCount > 4
+          ? (index.isEven
+              ? .035 + (index % 3) * .025
+              : .965 - (index % 3) * .025)
+          : (index + 1) / (noteCount + 1);
       final drift = (progress + index * .21) % 1;
       textPainter.text = TextSpan(
         text: glyphs[index % glyphs.length],
         style: TextStyle(
-          color: TeluguTunesColors.lavender
-              .withValues(alpha: .055 + (index % 4) * .012),
+          color: (light ? const Color(0xFF7438B8) : TeluguTunesColors.lavender)
+              .withValues(alpha: (light ? .08 : .055) + (index % 4) * .012),
           fontSize: 20 + (index % 4) * 4,
         ),
       );
@@ -257,7 +363,8 @@ class _AuroraPainter extends CustomPainter {
   bool shouldRepaint(_AuroraPainter oldDelegate) =>
       oldDelegate.progress != progress ||
       oldDelegate.showNotes != showNotes ||
-      oldDelegate.noteCount != noteCount;
+      oldDelegate.noteCount != noteCount ||
+      oldDelegate.light != light;
 }
 
 class FloatingArtwork extends StatefulWidget {
